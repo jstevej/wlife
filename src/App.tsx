@@ -1,8 +1,14 @@
 import { Component, createResource } from 'solid-js';
+import cellShaderCode from './CellShader.wgsl?raw';
+import simulationShaderCode from './SimulationShader.wgsl?raw';
 
-const width = 1024;
-const height = 1024;
-const gridSize = 128;
+//const width = (2048 + 256) * 2;
+//const height = (1024 + 256) * 2;
+const width = 8192;
+const height = 4096;
+const gridFactor = 4;
+const gridSizeX = width / gridFactor;
+const gridSizeY = height / gridFactor;
 
 const App: Component = () => {
     const [foo] = createResource('canvas', async (selector: string) => {
@@ -60,7 +66,7 @@ const App: Component = () => {
             ],
         };
 
-        const uniformArray = new Float32Array([gridSize, gridSize]);
+        const uniformArray = new Float32Array([gridSizeX, gridSizeY]);
         const uniformBuffer = device.createBuffer({
             label: 'grid uniforms',
             size: uniformArray.byteLength,
@@ -68,7 +74,7 @@ const App: Component = () => {
         });
         device.queue.writeBuffer(uniformBuffer, 0, uniformArray);
 
-        const cellStateArray = new Uint32Array(gridSize * gridSize);
+        const cellStateArray = new Uint32Array(gridSizeX * gridSizeY);
         const cellStateStorage = [
             device.createBuffer({
                 label: 'cell state ping',
@@ -90,91 +96,14 @@ const App: Component = () => {
 
         const cellShaderModule = device.createShaderModule({
             label: 'cell shader',
-            code: `
-            struct VertexInput {
-                @location(0) pos: vec2f,
-                @builtin(instance_index) instance: u32,
-            };
-
-            struct VertexOutput {
-                @builtin(position) pos: vec4f,
-                @location(0) cell: vec2f,
-            };
-
-            @group(0) @binding(0) var<uniform> grid: vec2f;
-            @group(0) @binding(1) var<storage> cellState: array<u32>;
-
-            @vertex
-            fn vertexMain(input: VertexInput) -> VertexOutput {
-                let state = f32(cellState[input.instance]);
-                let i = f32(input.instance);
-                let cell = vec2f(i % grid.x, floor(i / grid.x));
-
-                let cellOffset = cell / grid * 2;
-                let gridPos = (state * input.pos + 1) / grid - 1 + cellOffset;
-
-                var output: VertexOutput;
-                output.pos = vec4f(gridPos, 0, 1);
-                output.cell = cell;
-                return output;
-            }
-
-            @fragment
-            //fn fragmentMain(@location(0) cell: vec2f) -> @location(0) vec4f {
-            fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
-                //return vec4f(0, 0.4, 0.4, 1); // rgba
-                let c = input.cell / grid;
-                return vec4f(c, 1 - c.x, 1);
-            }
-            `,
+            code: cellShaderCode,
         });
 
         const workgroupSize = 8;
 
         const simulationShaderModule = device.createShaderModule({
             label: 'game of life simulation shader',
-            code: `
-                @group(0) @binding(0) var<uniform> grid: vec2f;
-                @group(0) @binding(1) var<storage> cellStateIn: array<u32>;
-                @group(0) @binding(2) var<storage, read_write> cellStateOut: array<u32>;
-
-                fn cellIndex(cell: vec2u) -> u32 {
-                    return (cell.y % u32(grid.y)) * u32(grid.x) + (cell.x % u32(grid.x));
-                }
-
-                fn cellAlive(x: u32, y: u32) -> u32 {
-                    return cellStateIn[cellIndex(vec2(x, y))];
-                }
-
-                @compute
-                @workgroup_size(${workgroupSize}, ${workgroupSize})
-                fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
-                    let numNeighbors = cellAlive(cell.x + 1, cell.y + 1) +
-                        cellAlive(cell.x + 1, cell.y) +
-                        cellAlive(cell.x + 1, cell.y - 1) +
-
-                        cellAlive(cell.x, cell.y + 1) +
-                        //cellAlive(cell.x, cell.y) +
-                        cellAlive(cell.x, cell.y - 1) +
-
-                        cellAlive(cell.x - 1, cell.y + 1) +
-                        cellAlive(cell.x - 1, cell.y) +
-                        cellAlive(cell.x - 1, cell.y - 1);
-                    let i = cellIndex(cell.xy);
-
-                    switch numNeighbors {
-                        case 2: {
-                            cellStateOut[i] = cellStateIn[i];
-                        }
-                        case 3: {
-                            cellStateOut[i] = 1;
-                        }
-                        default: {
-                            cellStateOut[i] = 0;
-                        }
-                    }
-                }
-            `,
+            code: simulationShaderCode,
         });
 
         // Pipeline.
@@ -270,7 +199,7 @@ const App: Component = () => {
             },
         });
 
-        const updateIntervalMs = 200;
+        const updateIntervalMs = 1000 / 20;
         let step = 0;
 
         function updateGrid() {
@@ -281,8 +210,9 @@ const App: Component = () => {
             const computePass = encoder.beginComputePass();
             computePass.setPipeline(simulationPipeline);
             computePass.setBindGroup(0, bindGroups[step % 2]);
-            const workgroupCount = Math.ceil(gridSize / workgroupSize);
-            computePass.dispatchWorkgroups(workgroupCount, workgroupCount);
+            const workgroupCountX = Math.ceil(gridSizeX / workgroupSize);
+            const workgroupCountY = Math.ceil(gridSizeY / workgroupSize);
+            computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
             computePass.end();
 
             step++;
@@ -292,7 +222,8 @@ const App: Component = () => {
                         view: context.getCurrentTexture().createView(),
                         loadOp: 'clear',
                         //clearValue: { r: 0.05, g: 0.05, b: 0.1, a: 1 },
-                        clearValue: [0.05, 0.05, 0.1, 1],
+                        //clearValue: [0.05, 0.05, 0.1, 1],
+                        clearValue: [0, 0, 0, 1],
                         storeOp: 'store',
                     },
                 ],
@@ -303,7 +234,7 @@ const App: Component = () => {
             pass.setBindGroup(0, bindGroups[step % 2]);
             // 2D points, so 2 points per vertex
             // draw a grid full of instances
-            pass.draw(vertices.length / 2, gridSize * gridSize);
+            pass.draw(vertices.length / 2, gridSizeX * gridSizeY);
 
             pass.end();
             device.queue.submit([encoder.finish()]);
