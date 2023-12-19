@@ -8,17 +8,19 @@ struct VertexOutput {
     @location(0) cell: vec2f,
 };
 
-@group(0) @binding(0) var<uniform> grid: vec2f;
-@group(0) @binding(1) var<storage> cellState: array<u32>;
+@group(0) @binding(0) var<uniform> gridSize: vec2f;
+@group(0) @binding(1) var<storage> viewScale: vec2f;
+@group(0) @binding(2) var<storage> viewOffset: vec2f;
+@group(0) @binding(3) var<storage> cellState: array<u32>;
 
 @vertex
 fn vertexMain(input: VertexInput) -> VertexOutput {
     let state = f32(cellState[input.instance] > 0);
     let i = f32(input.instance);
-    let cell = vec2f(i % grid.x, floor(i / grid.x));
+    let cell = vec2f(i % gridSize.x, floor(i / gridSize.x));
 
-    let cellOffset = cell / grid * 2;
-    let gridPos = (state * input.pos + 1) / grid - 1 + cellOffset;
+    let cellOffset = cell / gridSize * 2;
+    let gridPos = state * (((input.pos + 1) / gridSize - 1 + cellOffset) * viewScale + viewOffset);
 
     var output: VertexOutput;
     output.pos = vec4f(gridPos, 0, 1);
@@ -27,7 +29,7 @@ fn vertexMain(input: VertexInput) -> VertexOutput {
 }
 
 fn cellIndex(cell: vec2f) -> u32 {
-    return u32(cell.y * grid.x + cell.x);
+    return u32(cell.y * gridSize.x + cell.x);
 }
 
 fn hsl2rgb(hsl: vec3f) -> vec3f {

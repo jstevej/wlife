@@ -1,21 +1,24 @@
-import { Component, createMemo, createResource } from 'solid-js';
+import { Component, createResource } from 'solid-js';
 import cellShaderCode from './CellShader.wgsl?raw';
 import simulationShaderCode from './SimulationShader.wgsl?raw';
 
 export type GameOfLifeProps = {
+    cellExtentX: number;
+    cellExtentY: number;
     gameHeight: number;
     gameWidth: number;
     pixelsPerCellX: number;
     pixelsPerCellY: number;
     viewHeight: number;
+    viewOffsetX: number;
+    viewOffsetY: number;
     viewWidth: number;
 };
 
 export const GameOfLife: Component<GameOfLifeProps> = props => {
-    const gridSizeX = createMemo(() => props.gameWidth / props.pixelsPerCellX);
-    const gridSizeY = createMemo(() => props.gameHeight / props.pixelsPerCellY);
-
     const [foo] = createResource('canvas', async (selector: string) => {
+        const gridSizeX = props.gameWidth / props.pixelsPerCellX;
+        const gridSizeY = props.gameHeight / props.pixelsPerCellY;
         // Setup canvas.
 
         if (!navigator.gpu) {
@@ -50,9 +53,11 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         // Vertex stuff.
 
-        const vertices = new Float32Array([
-            -0.8, -0.8, 0.8, -0.8, 0.8, 0.8, -0.8, -0.8, 0.8, 0.8, -0.8, 0.8,
-        ]);
+        const vertices = new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]);
+        for (let i = 0; i < vertices.length; i += 2) {
+            vertices[i] *= props.cellExtentX;
+            vertices[i + 1] *= props.cellExtentY;
+        }
         const vertexBuffer = device.createBuffer({
             label: 'cell vertices',
             size: vertices.byteLength,
@@ -70,15 +75,34 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             ],
         };
 
-        const uniformArray = new Float32Array([gridSizeX(), gridSizeY()]);
-        const uniformBuffer = device.createBuffer({
-            label: 'grid uniforms',
-            size: uniformArray.byteLength,
+        const gridSizeArray = new Float32Array([gridSizeX, gridSizeY]);
+        const gridSizeBuffer = device.createBuffer({
+            label: 'gridSize uniform',
+            size: gridSizeArray.byteLength,
             usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
-        device.queue.writeBuffer(uniformBuffer, 0, uniformArray);
+        device.queue.writeBuffer(gridSizeBuffer, 0, gridSizeArray);
 
-        const cellStateArray = new Uint32Array(gridSizeX() * gridSizeY());
+        const viewScaleArray = new Float32Array([
+            props.gameWidth / props.viewWidth,
+            props.gameHeight / props.viewHeight,
+        ]);
+        const viewScaleStorage = device.createBuffer({
+            label: 'viewScale storage',
+            size: viewScaleArray.byteLength,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        device.queue.writeBuffer(viewScaleStorage, 0, viewScaleArray);
+
+        const viewOffsetArray = new Float32Array([0, 0]);
+        const viewOffsetStorage = device.createBuffer({
+            label: 'viewOffset storage',
+            size: viewOffsetArray.byteLength,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        device.queue.writeBuffer(viewOffsetStorage, 0, viewOffsetArray);
+
+        const cellStateArray = new Uint32Array(gridSizeX * gridSizeY);
         const cellStateStorage = [
             device.createBuffer({
                 label: 'cell state ping',
@@ -119,16 +143,28 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                     binding: 0,
                     visibility:
                         GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
-                    buffer: {}, // grid uniform buffer (default is 'uniform' so can leave empty)
+                    buffer: {}, // gridSize uniform buffer (default is 'uniform' so can leave empty)
                 },
                 {
                     binding: 1,
                     visibility:
                         GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
-                    buffer: { type: 'read-only-storage' }, // cell state input buffer
+                    buffer: { type: 'read-only-storage' },
                 },
                 {
                     binding: 2,
+                    visibility:
+                        GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                    buffer: { type: 'read-only-storage' },
+                },
+                {
+                    binding: 3,
+                    visibility:
+                        GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                    buffer: { type: 'read-only-storage' }, // cell state input buffer
+                },
+                {
+                    binding: 4,
                     visibility: GPUShaderStage.COMPUTE,
                     buffer: { type: 'storage' }, // cell state output buffer
                 },
@@ -141,15 +177,23 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                 layout: bindGroupLayout,
                 entries: [
                     {
-                        binding: 0, // corresponds to @binding(0)
-                        resource: { buffer: uniformBuffer },
+                        binding: 0,
+                        resource: { buffer: gridSizeBuffer },
                     },
                     {
-                        binding: 1, // corresponds to @binding(1)
-                        resource: { buffer: cellStateStorage[0] },
+                        binding: 1,
+                        resource: { buffer: viewScaleStorage },
                     },
                     {
                         binding: 2,
+                        resource: { buffer: viewOffsetStorage },
+                    },
+                    {
+                        binding: 3,
+                        resource: { buffer: cellStateStorage[0] },
+                    },
+                    {
+                        binding: 4,
                         resource: { buffer: cellStateStorage[1] },
                     },
                 ],
@@ -159,15 +203,23 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                 layout: bindGroupLayout,
                 entries: [
                     {
-                        binding: 0, // corresponds to @binding(0)
-                        resource: { buffer: uniformBuffer },
+                        binding: 0,
+                        resource: { buffer: gridSizeBuffer },
                     },
                     {
-                        binding: 1, // corresponds to @binding(1)
-                        resource: { buffer: cellStateStorage[1] },
+                        binding: 1,
+                        resource: { buffer: viewScaleStorage },
                     },
                     {
                         binding: 2,
+                        resource: { buffer: viewOffsetStorage },
+                    },
+                    {
+                        binding: 3,
+                        resource: { buffer: cellStateStorage[1] },
+                    },
+                    {
+                        binding: 4,
                         resource: { buffer: cellStateStorage[0] },
                     },
                 ],
@@ -214,8 +266,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             const computePass = encoder.beginComputePass();
             computePass.setPipeline(simulationPipeline);
             computePass.setBindGroup(0, bindGroups[step % 2]);
-            const workgroupCountX = Math.ceil(gridSizeX() / workgroupSize);
-            const workgroupCountY = Math.ceil(gridSizeY() / workgroupSize);
+            const workgroupCountX = Math.ceil(gridSizeX / workgroupSize);
+            const workgroupCountY = Math.ceil(gridSizeY / workgroupSize);
             computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
             computePass.end();
 
@@ -238,7 +290,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             pass.setBindGroup(0, bindGroups[step % 2]);
             // 2D points, so 2 points per vertex
             // draw a grid full of instances
-            pass.draw(vertices.length / 2, gridSizeX() * gridSizeY());
+            pass.draw(vertices.length / 2, gridSizeX * gridSizeY);
 
             pass.end();
             device.queue.submit([encoder.finish()]);

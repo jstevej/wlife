@@ -6,12 +6,16 @@ const App: Component = () => {
         <>
             <h1>WebGPU Life</h1>
             <GameOfLife
-                gameHeight={1024}
-                gameWidth={1024}
+                cellExtentX={1.0}
+                cellExtentY={1.0}
+                gameHeight={4096}
+                gameWidth={4096}
                 pixelsPerCellX={4}
                 pixelsPerCellY={4}
                 viewHeight={1024}
                 viewWidth={1024}
+                viewOffsetX={0}
+                viewOffsetY={0}
             />
         </>
     );
