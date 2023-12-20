@@ -1,16 +1,16 @@
-import { Component, createResource } from 'solid-js';
+import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
+import { Component, createEffect, createResource, createSignal, JSX, splitProps } from 'solid-js';
 import cellShaderCode from './CellShader.wgsl?raw';
 import simulationShaderCode from './SimulationShader.wgsl?raw';
 
 export type GameOfLifeProps = {
     cellExtentX: number;
     cellExtentY: number;
-    gameHeight: number;
-    gameWidth: number;
-    viewHeight: number;
-    viewOffsetX: number;
-    viewOffsetY: number;
-    viewWidth: number;
+} & JSX.HTMLAttributes<HTMLDivElement>;
+
+type Dimensions = {
+    height: number;
+    width: number;
 };
 
 // Javascript's modulo is weird for negative numbers. This fixes it.
@@ -21,7 +21,10 @@ function modulo(x: number, n: number): number {
 }
 
 export const GameOfLife: Component<GameOfLifeProps> = props => {
-    console.log(`screen size = ${window.screen.width} x ${window.screen.height}`);
+    const gameHeight = window.screen.height;
+    const gameWidth = window.screen.width;
+    const [, rest] = splitProps(props, ['cellExtentX', 'cellExtentY']);
+    const [ref, setRef] = createSignal<HTMLDivElement>();
     let mouseDragging = false;
     let mouseStartX = 0;
     let mouseStartY = 0;
@@ -30,6 +33,26 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     let mouseOffsetX = 0;
     let mouseOffsetY = 0;
     let scale = 4;
+    const [canvasSize, setCanvasSize] = createSignal<Dimensions>({ height: 100, width: 100 });
+    const canvasSizeThrottle = leadingAndTrailing(
+        throttle,
+        (dim: Dimensions) => setCanvasSize(dim),
+        500
+    );
+
+    createEffect(() => {
+        const fooRef = ref();
+        if (fooRef === undefined) return;
+        console.log(`registering resize observer`);
+        const resizeObserver = new ResizeObserver(entries => {
+            const rect = entries[0].contentRect;
+            canvasSizeThrottle({
+                height: Math.floor(rect.height),
+                width: Math.floor(rect.width),
+            });
+        });
+        resizeObserver.observe(fooRef);
+    });
 
     const [foo] = createResource('canvas', async (selector: string) => {
         // Setup canvas.
@@ -88,7 +111,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             ],
         };
 
-        const gridSizeArray = new Float32Array([props.gameWidth, props.gameHeight]);
+        const gridSizeArray = new Float32Array([gameWidth, gameHeight]);
         const gridSizeBuffer = device.createBuffer({
             label: 'gridSize uniform',
             size: gridSizeArray.byteLength,
@@ -97,8 +120,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         device.queue.writeBuffer(gridSizeBuffer, 0, gridSizeArray);
 
         const viewScaleArray = new Float32Array([
-            (4 * props.gameWidth) / props.viewWidth,
-            (4 * props.gameHeight) / props.viewHeight,
+            (4 * gameWidth) / canvasSize().width,
+            (4 * gameHeight) / canvasSize().height,
         ]);
         const viewScaleStorage = device.createBuffer({
             label: 'viewScale storage',
@@ -115,7 +138,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         });
         device.queue.writeBuffer(viewOffsetStorage, 0, viewOffsetArray);
 
-        const cellStateArray = new Uint32Array(props.gameWidth * props.gameHeight);
+        const cellStateArray = new Uint32Array(gameWidth * gameHeight);
         const cellStateStorage = [
             device.createBuffer({
                 label: 'cell state ping',
@@ -274,12 +297,12 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         function updateGrid() {
             if (!context) return;
 
-            viewOffsetArray[0] = modulo(mouseOffsetX + mouseDragX, props.gameWidth);
-            viewOffsetArray[1] = -modulo(mouseOffsetY + mouseDragY, props.gameHeight);
+            viewOffsetArray[0] = modulo(mouseOffsetX + mouseDragX, gameWidth);
+            viewOffsetArray[1] = -modulo(mouseOffsetY + mouseDragY, gameHeight);
             device.queue.writeBuffer(viewOffsetStorage, 0, viewOffsetArray);
 
-            viewScaleArray[0] = (scale * props.gameWidth) / props.viewWidth;
-            viewScaleArray[1] = (scale * props.gameHeight) / props.viewHeight;
+            viewScaleArray[0] = (scale * gameWidth) / canvasSize().width;
+            viewScaleArray[1] = (scale * gameHeight) / canvasSize().height;
             device.queue.writeBuffer(viewScaleStorage, 0, viewScaleArray);
 
             const encoder = device.createCommandEncoder();
@@ -287,8 +310,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             const computePass = encoder.beginComputePass();
             computePass.setPipeline(simulationPipeline);
             computePass.setBindGroup(0, bindGroups[step % 2]);
-            const workgroupCountX = Math.ceil(props.gameWidth / workgroupSize);
-            const workgroupCountY = Math.ceil(props.gameHeight / workgroupSize);
+            const workgroupCountX = Math.ceil(gameWidth / workgroupSize);
+            const workgroupCountY = Math.ceil(gameHeight / workgroupSize);
             computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
             computePass.end();
 
@@ -311,7 +334,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             pass.setBindGroup(0, bindGroups[step % 2]);
             // 2D points, so 2 points per vertex
             // draw a grid full of instances
-            pass.draw(vertices.length / 2, props.gameWidth * props.gameHeight);
+            pass.draw(vertices.length / 2, gameWidth * gameHeight);
 
             pass.end();
             device.queue.submit([encoder.finish()]);
@@ -334,8 +357,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     };
 
     const onMouseUp = (event: MouseEvent) => {
-        mouseOffsetX = modulo(mouseOffsetX + mouseDragX, props.gameWidth);
-        mouseOffsetY = modulo(mouseOffsetY + mouseDragY, props.gameHeight);
+        mouseOffsetX = modulo(mouseOffsetX + mouseDragX, gameWidth);
+        mouseOffsetY = modulo(mouseOffsetY + mouseDragY, gameHeight);
         mouseDragX = 0;
         mouseDragY = 0;
         mouseDragging = false;
@@ -347,14 +370,16 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     };
 
     return (
-        <canvas
-            width={props.viewWidth}
-            height={props.viewHeight}
-            onMouseDown={onMouseDown}
-            onMouseMove={onMouseMove}
-            onMouseOut={onMouseUp}
-            onMouseUp={onMouseUp}
-            onWheel={onWheel}
-        />
+        <div {...rest} ref={setRef}>
+            <canvas
+                width={canvasSize().width}
+                height={canvasSize().height}
+                onMouseDown={onMouseDown}
+                onMouseMove={onMouseMove}
+                onMouseOut={onMouseUp}
+                onMouseUp={onMouseUp}
+                onWheel={onWheel}
+            />
+        </div>
     );
 };
