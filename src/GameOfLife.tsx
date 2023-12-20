@@ -1,11 +1,11 @@
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import { Component, createEffect, createResource, createSignal, JSX, splitProps } from 'solid-js';
 import cellShaderCode from './CellShader.wgsl?raw';
+import { useGameOfLife } from './GameOfLifeProvider';
 import simulationShaderCode from './SimulationShader.wgsl?raw';
 
 export type GameOfLifeProps = {
-    cellExtentX: number;
-    cellExtentY: number;
+    foo?: string;
 } & JSX.HTMLAttributes<HTMLDivElement>;
 
 type Dimensions = {
@@ -23,7 +23,8 @@ function modulo(x: number, n: number): number {
 export const GameOfLife: Component<GameOfLifeProps> = props => {
     const gameHeight = window.screen.height;
     const gameWidth = window.screen.width;
-    const [, rest] = splitProps(props, ['cellExtentX', 'cellExtentY']);
+    const [, rest] = splitProps(props, ['foo']);
+    const { cellExtent, frameRate, resetListen } = useGameOfLife();
     const [ref, setRef] = createSignal<HTMLDivElement>();
     let mouseDragging = false;
     let mouseStartX = 0;
@@ -91,8 +92,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         const vertices = new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]);
         for (let i = 0; i < vertices.length; i += 2) {
-            vertices[i] *= props.cellExtentX;
-            vertices[i + 1] *= props.cellExtentY;
+            vertices[i] *= cellExtent().width;
+            vertices[i + 1] *= cellExtent().height;
         }
         const vertexBuffer = device.createBuffer({
             label: 'cell vertices',
@@ -291,8 +292,15 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             },
         });
 
-        const updateIntervalMs = 1000 / 20;
         let step = 0;
+
+        resetListen(() => {
+            step = 0;
+            for (let i = 0; i < cellStateArray.length; i++) {
+                cellStateArray[i] = Math.random() > 0.6 ? 1 : 0;
+            }
+            device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray);
+        });
 
         function updateGrid() {
             if (!context) return;
@@ -340,7 +348,18 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             device.queue.submit([encoder.finish()]);
         }
 
-        setInterval(updateGrid, updateIntervalMs);
+        let updateInterval: ReturnType<typeof setInterval> | undefined;
+
+        createEffect(() => {
+            const updateIntervalMs = 1000 / frameRate();
+            console.log(`frameRate = ${frameRate()}, updateIntervalMs = ${updateIntervalMs}`);
+
+            if (updateInterval !== undefined) {
+                clearInterval(updateInterval);
+            }
+
+            updateInterval = setInterval(updateGrid, updateIntervalMs);
+        });
     });
 
     const onMouseDown = (event: MouseEvent) => {

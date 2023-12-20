@@ -1,16 +1,18 @@
 import { Component } from 'solid-js';
+import { Controls } from './Controls';
 import { GameOfLife } from './GameOfLife';
+import { GameOfLifeProvider } from './GameOfLifeProvider';
 
 const App: Component = () => {
     return (
-        <div class="flex h-screen w-screen">
-            <div class="flex flex-col flex-1 overflow-hidden">
-                <GameOfLife class="flex-1 overflow-hidden" cellExtentX={1.0} cellExtentY={1.0} />
+        <GameOfLifeProvider>
+            <div class="flex h-screen w-screen">
+                <div class="flex flex-col flex-1 overflow-hidden">
+                    <GameOfLife class="flex-1 overflow-hidden" />
+                </div>
+                <Controls/>
             </div>
-            <div>
-                <h1>Controls</h1>
-            </div>
-        </div>
+        </GameOfLifeProvider>
     );
 };
 

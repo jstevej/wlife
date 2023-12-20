@@ -30,6 +30,7 @@
     "vite-plugin-solid": "^2.7.0"
   },
   "dependencies": {
+    "@solid-primitives/event-bus": "^1.0.8",
     "@solid-primitives/scheduled": "^1.4.1",
     "solid-js": "^1.7.6"
   }
