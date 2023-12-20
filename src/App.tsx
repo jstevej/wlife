@@ -13,7 +13,7 @@ const App: Component = () => {
                 pixelsPerCellX={4}
                 pixelsPerCellY={4}
                 viewHeight={1024}
-                viewWidth={1024}
+                viewWidth={2048}
                 viewOffsetX={0}
                 viewOffsetY={0}
             />

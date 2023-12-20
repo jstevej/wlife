@@ -13,6 +13,7 @@ fn cellAlive(x: u32, y: u32) -> u32 {
 // rules[numNeighbors] = (ifAlive << 1) | (ifDead);
 
 const rules: array<u32, 8> = array(0, 0, 2, 3, 0, 0, 0, 0);
+//const rules: array<u32, 8> = array(0, 0, 2, 2, 3, 0, 0, 0); // jenn's rules
 
 @compute
 @workgroup_size(8, 8)

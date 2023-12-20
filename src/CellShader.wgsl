@@ -13,14 +13,16 @@ struct VertexOutput {
 @group(0) @binding(2) var<storage> viewOffset: vec2f;
 @group(0) @binding(3) var<storage> cellState: array<u32>;
 
+fn modulo(x: vec2f, n: vec2f) -> vec2f {
+    return ((x % n) + n) % n;
+}
+
 @vertex
 fn vertexMain(input: VertexInput) -> VertexOutput {
     let state = f32(cellState[input.instance] > 0);
     let i = f32(input.instance);
     let cell = vec2f(i % gridSize.x, floor(i / gridSize.x));
-
-    let cellOffset = cell / gridSize * 2;
-    let gridPos = state * (((input.pos + 1) / gridSize - 1 + cellOffset) * viewScale + viewOffset);
+    let gridPos = state * (((input.pos + 1 + 2 * modulo(cell + viewOffset, gridSize)) / gridSize) - 1) * viewScale;
 
     var output: VertexOutput;
     output.pos = vec4f(gridPos, 0, 1);

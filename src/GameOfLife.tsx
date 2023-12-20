@@ -15,7 +15,22 @@ export type GameOfLifeProps = {
     viewWidth: number;
 };
 
+// Javascript's modulo is weird for negative numbers. This fixes it.
+// https://web.archive.org/web/20090717035140if_/javascript.about.com/od/problemsolving/a/modulobug.htm
+
+function modulo(x: number, n: number): number {
+    return ((x % n) + n) % n;
+}
+
 export const GameOfLife: Component<GameOfLifeProps> = props => {
+    let mouseDragging = false;
+    let mouseStartX = 0;
+    let mouseStartY = 0;
+    let mouseDragX = 0;
+    let mouseDragY = 0;
+    let mouseOffsetX = 0;
+    let mouseOffsetY = 0;
+
     const [foo] = createResource('canvas', async (selector: string) => {
         const gridSizeX = props.gameWidth / props.pixelsPerCellX;
         const gridSizeY = props.gameHeight / props.pixelsPerCellY;
@@ -261,6 +276,12 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         function updateGrid() {
             if (!context) return;
 
+            viewOffsetArray[0] =
+                modulo(mouseOffsetX + mouseDragX, props.gameWidth) / props.pixelsPerCellX;
+            viewOffsetArray[1] =
+                -modulo(mouseOffsetY + mouseDragY, props.gameHeight) / props.pixelsPerCellY;
+            device.queue.writeBuffer(viewOffsetStorage, 0, viewOffsetArray);
+
             const encoder = device.createCommandEncoder();
 
             const computePass = encoder.beginComputePass();
@@ -299,5 +320,38 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         setInterval(updateGrid, updateIntervalMs);
     });
 
-    return <canvas width={props.viewWidth} height={props.viewHeight} />;
+    const onMouseDown = (event: MouseEvent) => {
+        mouseStartX = event.clientX;
+        mouseStartY = event.clientY;
+        mouseDragging = true;
+        console.log(`mousedown: ${mouseStartX}, ${mouseStartY}`);
+    };
+
+    const onMouseMove = (event: MouseEvent) => {
+        if (mouseDragging) {
+            mouseDragX = event.clientX - mouseStartX;
+            mouseDragY = event.clientY - mouseStartY;
+            console.log(`mousemove: ${mouseDragX}, ${mouseDragY}`);
+        }
+    };
+
+    const onMouseUp = (event: MouseEvent) => {
+        mouseOffsetX = modulo(mouseOffsetX + mouseDragX, props.gameWidth);
+        mouseOffsetY = modulo(mouseOffsetY + mouseDragY, props.gameHeight);
+        mouseDragX = 0;
+        mouseDragY = 0;
+        mouseDragging = false;
+        console.log(`mouseup`);
+    };
+
+    return (
+        <canvas
+            width={props.viewWidth}
+            height={props.viewHeight}
+            onMouseDown={onMouseDown}
+            onMouseMove={onMouseMove}
+            onMouseOut={onMouseUp}
+            onMouseUp={onMouseUp}
+        />
+    );
 };
