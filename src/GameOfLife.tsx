@@ -7,8 +7,6 @@ export type GameOfLifeProps = {
     cellExtentY: number;
     gameHeight: number;
     gameWidth: number;
-    pixelsPerCellX: number;
-    pixelsPerCellY: number;
     viewHeight: number;
     viewOffsetX: number;
     viewOffsetY: number;
@@ -23,6 +21,7 @@ function modulo(x: number, n: number): number {
 }
 
 export const GameOfLife: Component<GameOfLifeProps> = props => {
+    console.log(`screen size = ${window.screen.width} x ${window.screen.height}`);
     let mouseDragging = false;
     let mouseStartX = 0;
     let mouseStartY = 0;
@@ -30,10 +29,9 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     let mouseDragY = 0;
     let mouseOffsetX = 0;
     let mouseOffsetY = 0;
+    let scale = 4;
 
     const [foo] = createResource('canvas', async (selector: string) => {
-        const gridSizeX = props.gameWidth / props.pixelsPerCellX;
-        const gridSizeY = props.gameHeight / props.pixelsPerCellY;
         // Setup canvas.
 
         if (!navigator.gpu) {
@@ -90,7 +88,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             ],
         };
 
-        const gridSizeArray = new Float32Array([gridSizeX, gridSizeY]);
+        const gridSizeArray = new Float32Array([props.gameWidth, props.gameHeight]);
         const gridSizeBuffer = device.createBuffer({
             label: 'gridSize uniform',
             size: gridSizeArray.byteLength,
@@ -99,8 +97,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         device.queue.writeBuffer(gridSizeBuffer, 0, gridSizeArray);
 
         const viewScaleArray = new Float32Array([
-            props.gameWidth / props.viewWidth,
-            props.gameHeight / props.viewHeight,
+            (4 * props.gameWidth) / props.viewWidth,
+            (4 * props.gameHeight) / props.viewHeight,
         ]);
         const viewScaleStorage = device.createBuffer({
             label: 'viewScale storage',
@@ -117,7 +115,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         });
         device.queue.writeBuffer(viewOffsetStorage, 0, viewOffsetArray);
 
-        const cellStateArray = new Uint32Array(gridSizeX * gridSizeY);
+        const cellStateArray = new Uint32Array(props.gameWidth * props.gameHeight);
         const cellStateStorage = [
             device.createBuffer({
                 label: 'cell state ping',
@@ -276,19 +274,21 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         function updateGrid() {
             if (!context) return;
 
-            viewOffsetArray[0] =
-                modulo(mouseOffsetX + mouseDragX, props.gameWidth) / props.pixelsPerCellX;
-            viewOffsetArray[1] =
-                -modulo(mouseOffsetY + mouseDragY, props.gameHeight) / props.pixelsPerCellY;
+            viewOffsetArray[0] = modulo(mouseOffsetX + mouseDragX, props.gameWidth);
+            viewOffsetArray[1] = -modulo(mouseOffsetY + mouseDragY, props.gameHeight);
             device.queue.writeBuffer(viewOffsetStorage, 0, viewOffsetArray);
+
+            viewScaleArray[0] = (scale * props.gameWidth) / props.viewWidth;
+            viewScaleArray[1] = (scale * props.gameHeight) / props.viewHeight;
+            device.queue.writeBuffer(viewScaleStorage, 0, viewScaleArray);
 
             const encoder = device.createCommandEncoder();
 
             const computePass = encoder.beginComputePass();
             computePass.setPipeline(simulationPipeline);
             computePass.setBindGroup(0, bindGroups[step % 2]);
-            const workgroupCountX = Math.ceil(gridSizeX / workgroupSize);
-            const workgroupCountY = Math.ceil(gridSizeY / workgroupSize);
+            const workgroupCountX = Math.ceil(props.gameWidth / workgroupSize);
+            const workgroupCountY = Math.ceil(props.gameHeight / workgroupSize);
             computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
             computePass.end();
 
@@ -311,7 +311,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             pass.setBindGroup(0, bindGroups[step % 2]);
             // 2D points, so 2 points per vertex
             // draw a grid full of instances
-            pass.draw(vertices.length / 2, gridSizeX * gridSizeY);
+            pass.draw(vertices.length / 2, props.gameWidth * props.gameHeight);
 
             pass.end();
             device.queue.submit([encoder.finish()]);
@@ -324,14 +324,12 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         mouseStartX = event.clientX;
         mouseStartY = event.clientY;
         mouseDragging = true;
-        console.log(`mousedown: ${mouseStartX}, ${mouseStartY}`);
     };
 
     const onMouseMove = (event: MouseEvent) => {
         if (mouseDragging) {
-            mouseDragX = event.clientX - mouseStartX;
-            mouseDragY = event.clientY - mouseStartY;
-            console.log(`mousemove: ${mouseDragX}, ${mouseDragY}`);
+            mouseDragX = (event.clientX - mouseStartX) / scale;
+            mouseDragY = (event.clientY - mouseStartY) / scale;
         }
     };
 
@@ -341,7 +339,11 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         mouseDragX = 0;
         mouseDragY = 0;
         mouseDragging = false;
-        console.log(`mouseup`);
+    };
+
+    const onWheel = (event: WheelEvent) => {
+        scale = Math.min(Math.max(scale + Math.sign(event.deltaY), 1), 15);
+        event.preventDefault();
     };
 
     return (
@@ -352,6 +354,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             onMouseMove={onMouseMove}
             onMouseOut={onMouseUp}
             onMouseUp={onMouseUp}
+            onWheel={onWheel}
         />
     );
 };

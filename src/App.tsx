@@ -8,10 +8,8 @@ const App: Component = () => {
             <GameOfLife
                 cellExtentX={1.0}
                 cellExtentY={1.0}
-                gameHeight={4096}
-                gameWidth={4096}
-                pixelsPerCellX={4}
-                pixelsPerCellY={4}
+                gameHeight={2048}
+                gameWidth={2048}
                 viewHeight={1024}
                 viewWidth={2048}
                 viewOffsetX={0}
