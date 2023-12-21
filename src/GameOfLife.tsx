@@ -471,7 +471,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     };
 
     const onWheel = (event: WheelEvent) => {
-        const invert = untrack(zoomIsInverted) ? -1 : 1;
+        const invert = untrack(zoomIsInverted) ? 1 : -1;
         const direction = Math.sign(event.deltaY);
         const newScale = Math.min(Math.max(scale + invert * direction, 1), 15);
         if (newScale === scale) return;

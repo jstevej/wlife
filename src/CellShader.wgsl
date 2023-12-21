@@ -14,15 +14,18 @@ struct VertexOutput {
 @group(0) @binding(3) var<storage> cellState: array<u32>;
 
 fn modulo(x: vec2f, n: vec2f) -> vec2f {
-    return ((x % n) + n) % n;
+    //return ((x % n) + n) % n;
+    // assume n is positive, then use floored division
+    return x - n * floor(x / n);
 }
 
 @vertex
 fn vertexMain(input: VertexInput) -> VertexOutput {
-    let state = f32(cellState[input.instance] > 0);
     let i = f32(input.instance);
     let cell = vec2f(i % gridSize.x, floor(i / gridSize.x));
-    let gridPos = state * (((input.pos + 1 + 2 * modulo(cell + viewOffset, gridSize)) / gridSize) - 1) * viewScale;
+    let state = f32(cellState[input.instance] > 0 || cell.x == 0 || cell.y == 0);
+    let offsetCell = modulo(cell + viewOffset, gridSize);
+    let gridPos = state * (((input.pos + 1 + 2 * offsetCell) / gridSize) - 1) * viewScale;
 
     var output: VertexOutput;
     output.pos = vec4f(gridPos, 0, 1);
@@ -43,7 +46,8 @@ fn hsl2rgb(hsl: vec3f) -> vec3f {
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
     let i = cellIndex(input.cell);
+    let state = f32(cellState[i] > 0);
     let hue = 0.667 * min(f32(cellState[i]) / 100.0, 1.0);
-    let rgb = hsl2rgb(vec3f(hue, 0.9, 0.5));
+    let rgb = hsl2rgb(vec3f(state * hue + (1 - state) * 0.333, 0.9, 0.5));
     return vec4f(rgb,  1);
 }

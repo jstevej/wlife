@@ -12,18 +12,25 @@ fn cellAlive(x: u32, y: u32) -> u32 {
 
 // rules[numNeighbors] = (ifAlive << 1) | (ifDead);
 
-const rules: array<u32, 8> = array(0, 0, 2, 3, 0, 0, 0, 0);
-//const rules: array<u32, 8> = array(0, 0, 2, 2, 3, 0, 0, 0); // jenn's rules
+const rules: array<u32, 9> = array(0, 0, 2, 3, 0, 0, 0, 0, 0);
+//const rules: array<u32, 9> = array(0, 0, 2, 2, 3, 0, 0, 0, 0); // jenn's rules
+
+fn modulo(x: i32, n: u32) -> u32 {
+    //return u32(((x % n) + n) % n);
+    // assume n is positive, then use floored division
+    return u32(i32(x) - i32(n) * i32(floor(f32(x) / f32(n))));
+}
 
 @compute
 @workgroup_size(8, 8)
 fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
-    let left = (cell.x - 1) % u32(gridSize.x);
-    let right = (cell.x + 1) % u32(gridSize.x);
-    let top = (cell.y + 1) % u32(gridSize.y);
-    let bottom = (cell.y - 1) % u32(gridSize.y);
+    let left = modulo(i32(cell.x) - 1, u32(gridSize.x));
+    let right = modulo(i32(cell.x) + 1, u32(gridSize.x));
+    let top = modulo(i32(cell.y) + 1, u32(gridSize.y));
+    let bottom = modulo(i32(cell.y) - 1, u32(gridSize.y));
 
-    let numNeighbors = cellAlive(left, top) +
+    let numNeighbors =
+        cellAlive(left, top) +
         cellAlive(cell.x, top) +
         cellAlive(right, top) +
         cellAlive(left, cell.y) +
