@@ -1,5 +1,14 @@
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
-import { Component, createEffect, createResource, createSignal, JSX, splitProps } from 'solid-js';
+import {
+    Component,
+    createEffect,
+    createResource,
+    createSignal,
+    JSX,
+    Match,
+    splitProps,
+    Switch,
+} from 'solid-js';
 import cellShaderCode from './CellShader.wgsl?raw';
 import { useGameOfLife } from './GameOfLifeProvider';
 import simulationShaderCode from './SimulationShader.wgsl?raw';
@@ -54,311 +63,311 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         resizeObserver.observe(fooRef);
     });
 
-    const [foo] = createResource('canvas', async (selector: string) => {
-        // Setup canvas.
+    const [canvasError] = createResource<string | undefined>(
+        async (): Promise<string | undefined> => {
+            // Setup canvas.
 
-        if (!navigator.gpu) {
-            console.error(`WebGPU not supported on this browser`);
-            return undefined;
-        }
+            if (!navigator.gpu) return `WebGPU not supported on this browser`;
 
-        const adapter = await navigator.gpu.requestAdapter();
+            const adapter = await navigator.gpu.requestAdapter();
 
-        if (!adapter) {
-            console.error(`WebGPU adapter not found`);
-            return undefined;
-        }
+            if (!adapter) return `WebGPU adapter not found`;
 
-        const device = await adapter.requestDevice();
-        const canvas = document.querySelector('canvas');
+            const device = await adapter.requestDevice();
+            const canvas = document.querySelector('canvas');
 
-        if (!canvas) {
-            console.error(`canvas not found`);
-            return undefined;
-        }
+            if (!canvas) return `canvas element not found`;
 
-        const context = canvas.getContext('webgpu');
+            const context = canvas.getContext('webgpu');
 
-        if (!context) {
-            console.error(`context not found`);
-            return undefined;
-        }
+            if (!context) return `context not found`;
 
-        const format = navigator.gpu.getPreferredCanvasFormat();
-        context.configure({ device, format });
+            const format = navigator.gpu.getPreferredCanvasFormat();
+            context.configure({ device, format });
 
-        // Vertex stuff.
+            // Vertex stuff.
 
-        const vertices = new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]);
-        for (let i = 0; i < vertices.length; i += 2) {
-            vertices[i] *= 1;
-            vertices[i + 1] *= 1;
-        }
-        const vertexBuffer = device.createBuffer({
-            label: 'cell vertices',
-            size: vertices.byteLength,
-            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-        });
-        device.queue.writeBuffer(vertexBuffer, 0, vertices);
-        const vertexBufferLayout: GPUVertexBufferLayout = {
-            arrayStride: 8, // 2 32-bit floats (one 2D point) = 8 bytes
-            attributes: [
-                {
-                    format: 'float32x2',
-                    offset: 0,
-                    shaderLocation: 0, // position: 0-15, see vertex shader
-                },
-            ],
-        };
-
-        const gridSizeArray = new Float32Array([gameWidth, gameHeight]);
-        const gridSizeBuffer = device.createBuffer({
-            label: 'gridSize uniform',
-            size: gridSizeArray.byteLength,
-            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
-        });
-        device.queue.writeBuffer(gridSizeBuffer, 0, gridSizeArray);
-
-        const viewScaleArray = new Float32Array([
-            (4 * gameWidth) / canvasSize().width,
-            (4 * gameHeight) / canvasSize().height,
-        ]);
-        const viewScaleStorage = device.createBuffer({
-            label: 'viewScale storage',
-            size: viewScaleArray.byteLength,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        });
-        device.queue.writeBuffer(viewScaleStorage, 0, viewScaleArray);
-
-        const viewOffsetArray = new Float32Array([0, 0]);
-        const viewOffsetStorage = device.createBuffer({
-            label: 'viewOffset storage',
-            size: viewOffsetArray.byteLength,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-        });
-        device.queue.writeBuffer(viewOffsetStorage, 0, viewOffsetArray);
-
-        const cellStateArray = new Uint32Array(gameWidth * gameHeight);
-        const cellStateStorage = [
-            device.createBuffer({
-                label: 'cell state ping',
-                size: cellStateArray.byteLength,
-                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-            }),
-            device.createBuffer({
-                label: 'cell state pong',
-                size: cellStateArray.byteLength,
-                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-            }),
-        ];
-        for (let i = 0; i < cellStateArray.length; i++) {
-            cellStateArray[i] = Math.random() > 0.6 ? 1 : 0;
-        }
-        device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray);
-
-        // Shader stuff.
-
-        const cellShaderModule = device.createShaderModule({
-            label: 'cell shader',
-            code: cellShaderCode,
-        });
-
-        const workgroupSize = 8;
-
-        const simulationShaderModule = device.createShaderModule({
-            label: 'game of life simulation shader',
-            code: simulationShaderCode,
-        });
-
-        // Pipeline.
-
-        const bindGroupLayout = device.createBindGroupLayout({
-            label: 'cell bind group layout',
-            entries: [
-                {
-                    binding: 0,
-                    visibility:
-                        GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
-                    buffer: {}, // gridSize uniform buffer (default is 'uniform' so can leave empty)
-                },
-                {
-                    binding: 1,
-                    visibility:
-                        GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
-                    buffer: { type: 'read-only-storage' },
-                },
-                {
-                    binding: 2,
-                    visibility:
-                        GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
-                    buffer: { type: 'read-only-storage' },
-                },
-                {
-                    binding: 3,
-                    visibility:
-                        GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
-                    buffer: { type: 'read-only-storage' }, // cell state input buffer
-                },
-                {
-                    binding: 4,
-                    visibility: GPUShaderStage.COMPUTE,
-                    buffer: { type: 'storage' }, // cell state output buffer
-                },
-            ],
-        });
-
-        const bindGroups = [
-            device.createBindGroup({
-                label: 'cell renderer bind group (ping)',
-                layout: bindGroupLayout,
-                entries: [
+            const vertices = new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]);
+            for (let i = 0; i < vertices.length; i += 2) {
+                vertices[i] *= 1;
+                vertices[i + 1] *= 1;
+            }
+            const vertexBuffer = device.createBuffer({
+                label: 'cell vertices',
+                size: vertices.byteLength,
+                usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+            });
+            device.queue.writeBuffer(vertexBuffer, 0, vertices);
+            const vertexBufferLayout: GPUVertexBufferLayout = {
+                arrayStride: 8, // 2 32-bit floats (one 2D point) = 8 bytes
+                attributes: [
                     {
-                        binding: 0,
-                        resource: { buffer: gridSizeBuffer },
-                    },
-                    {
-                        binding: 1,
-                        resource: { buffer: viewScaleStorage },
-                    },
-                    {
-                        binding: 2,
-                        resource: { buffer: viewOffsetStorage },
-                    },
-                    {
-                        binding: 3,
-                        resource: { buffer: cellStateStorage[0] },
-                    },
-                    {
-                        binding: 4,
-                        resource: { buffer: cellStateStorage[1] },
+                        format: 'float32x2',
+                        offset: 0,
+                        shaderLocation: 0, // position: 0-15, see vertex shader
                     },
                 ],
-            }),
-            device.createBindGroup({
-                label: 'cell renderer bind group (pong)',
-                layout: bindGroupLayout,
-                entries: [
-                    {
-                        binding: 0,
-                        resource: { buffer: gridSizeBuffer },
-                    },
-                    {
-                        binding: 1,
-                        resource: { buffer: viewScaleStorage },
-                    },
-                    {
-                        binding: 2,
-                        resource: { buffer: viewOffsetStorage },
-                    },
-                    {
-                        binding: 3,
-                        resource: { buffer: cellStateStorage[1] },
-                    },
-                    {
-                        binding: 4,
-                        resource: { buffer: cellStateStorage[0] },
-                    },
-                ],
-            }),
-        ];
+            };
 
-        const pipelineLayout = device.createPipelineLayout({
-            label: 'cell pipeline layout',
-            bindGroupLayouts: [bindGroupLayout],
-        });
+            const gridSizeArray = new Float32Array([gameWidth, gameHeight]);
+            const gridSizeBuffer = device.createBuffer({
+                label: 'gridSize uniform',
+                size: gridSizeArray.byteLength,
+                usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+            });
+            device.queue.writeBuffer(gridSizeBuffer, 0, gridSizeArray);
 
-        const cellPipeline = device.createRenderPipeline({
-            label: 'cell pipeline',
-            layout: pipelineLayout,
-            vertex: {
-                module: cellShaderModule,
-                entryPoint: 'vertexMain',
-                buffers: [vertexBufferLayout],
-            },
-            fragment: {
-                module: cellShaderModule,
-                entryPoint: 'fragmentMain',
-                targets: [{ format }],
-            },
-        });
+            const viewScaleArray = new Float32Array([
+                (4 * gameWidth) / canvasSize().width,
+                (4 * gameHeight) / canvasSize().height,
+            ]);
+            const viewScaleStorage = device.createBuffer({
+                label: 'viewScale storage',
+                size: viewScaleArray.byteLength,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+            });
+            device.queue.writeBuffer(viewScaleStorage, 0, viewScaleArray);
 
-        const simulationPipeline = device.createComputePipeline({
-            label: 'simulation pipeline',
-            layout: pipelineLayout,
-            compute: {
-                module: simulationShaderModule,
-                entryPoint: 'computeMain',
-            },
-        });
+            const viewOffsetArray = new Float32Array([0, 0]);
+            const viewOffsetStorage = device.createBuffer({
+                label: 'viewOffset storage',
+                size: viewOffsetArray.byteLength,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+            });
+            device.queue.writeBuffer(viewOffsetStorage, 0, viewOffsetArray);
 
-        let step = 0;
-
-        resetListen(() => {
-            step = 0;
+            const cellStateArray = new Uint32Array(gameWidth * gameHeight);
+            const cellStateStorage = [
+                device.createBuffer({
+                    label: 'cell state ping',
+                    size: cellStateArray.byteLength,
+                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+                }),
+                device.createBuffer({
+                    label: 'cell state pong',
+                    size: cellStateArray.byteLength,
+                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+                }),
+            ];
             for (let i = 0; i < cellStateArray.length; i++) {
                 cellStateArray[i] = Math.random() > 0.6 ? 1 : 0;
             }
             device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray);
-        });
 
-        function updateGrid() {
-            if (!context) return;
+            // Shader stuff.
 
-            viewOffsetArray[0] = modulo(mouseOffsetX + mouseDragX, gameWidth);
-            viewOffsetArray[1] = -modulo(mouseOffsetY + mouseDragY, gameHeight);
-            device.queue.writeBuffer(viewOffsetStorage, 0, viewOffsetArray);
+            const cellShaderModule = device.createShaderModule({
+                label: 'cell shader',
+                code: cellShaderCode,
+            });
 
-            viewScaleArray[0] = (scale * gameWidth) / canvasSize().width;
-            viewScaleArray[1] = (scale * gameHeight) / canvasSize().height;
-            device.queue.writeBuffer(viewScaleStorage, 0, viewScaleArray);
+            const workgroupSize = 8;
 
-            const encoder = device.createCommandEncoder();
+            const simulationShaderModule = device.createShaderModule({
+                label: 'game of life simulation shader',
+                code: simulationShaderCode,
+            });
 
-            const computePass = encoder.beginComputePass();
-            computePass.setPipeline(simulationPipeline);
-            computePass.setBindGroup(0, bindGroups[step % 2]);
-            const workgroupCountX = Math.ceil(gameWidth / workgroupSize);
-            const workgroupCountY = Math.ceil(gameHeight / workgroupSize);
-            computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
-            computePass.end();
+            // Pipeline.
 
-            step++;
-            const pass = encoder.beginRenderPass({
-                colorAttachments: [
+            const bindGroupLayout = device.createBindGroupLayout({
+                label: 'cell bind group layout',
+                entries: [
                     {
-                        view: context.getCurrentTexture().createView(),
-                        loadOp: 'clear',
-                        //clearValue: { r: 0.05, g: 0.05, b: 0.1, a: 1 },
-                        //clearValue: [0.05, 0.05, 0.1, 1],
-                        clearValue: [0, 0, 0, 1],
-                        storeOp: 'store',
+                        binding: 0,
+                        visibility:
+                            GPUShaderStage.VERTEX |
+                            GPUShaderStage.COMPUTE |
+                            GPUShaderStage.FRAGMENT,
+                        buffer: {}, // gridSize uniform buffer (default is 'uniform' so can leave empty)
+                    },
+                    {
+                        binding: 1,
+                        visibility:
+                            GPUShaderStage.VERTEX |
+                            GPUShaderStage.COMPUTE |
+                            GPUShaderStage.FRAGMENT,
+                        buffer: { type: 'read-only-storage' },
+                    },
+                    {
+                        binding: 2,
+                        visibility:
+                            GPUShaderStage.VERTEX |
+                            GPUShaderStage.COMPUTE |
+                            GPUShaderStage.FRAGMENT,
+                        buffer: { type: 'read-only-storage' },
+                    },
+                    {
+                        binding: 3,
+                        visibility:
+                            GPUShaderStage.VERTEX |
+                            GPUShaderStage.COMPUTE |
+                            GPUShaderStage.FRAGMENT,
+                        buffer: { type: 'read-only-storage' }, // cell state input buffer
+                    },
+                    {
+                        binding: 4,
+                        visibility: GPUShaderStage.COMPUTE,
+                        buffer: { type: 'storage' }, // cell state output buffer
                     },
                 ],
             });
 
-            pass.setPipeline(cellPipeline);
-            pass.setVertexBuffer(0, vertexBuffer);
-            pass.setBindGroup(0, bindGroups[step % 2]);
-            // 2D points, so 2 points per vertex
-            // draw a grid full of instances
-            pass.draw(vertices.length / 2, gameWidth * gameHeight);
+            const bindGroups = [
+                device.createBindGroup({
+                    label: 'cell renderer bind group (ping)',
+                    layout: bindGroupLayout,
+                    entries: [
+                        {
+                            binding: 0,
+                            resource: { buffer: gridSizeBuffer },
+                        },
+                        {
+                            binding: 1,
+                            resource: { buffer: viewScaleStorage },
+                        },
+                        {
+                            binding: 2,
+                            resource: { buffer: viewOffsetStorage },
+                        },
+                        {
+                            binding: 3,
+                            resource: { buffer: cellStateStorage[0] },
+                        },
+                        {
+                            binding: 4,
+                            resource: { buffer: cellStateStorage[1] },
+                        },
+                    ],
+                }),
+                device.createBindGroup({
+                    label: 'cell renderer bind group (pong)',
+                    layout: bindGroupLayout,
+                    entries: [
+                        {
+                            binding: 0,
+                            resource: { buffer: gridSizeBuffer },
+                        },
+                        {
+                            binding: 1,
+                            resource: { buffer: viewScaleStorage },
+                        },
+                        {
+                            binding: 2,
+                            resource: { buffer: viewOffsetStorage },
+                        },
+                        {
+                            binding: 3,
+                            resource: { buffer: cellStateStorage[1] },
+                        },
+                        {
+                            binding: 4,
+                            resource: { buffer: cellStateStorage[0] },
+                        },
+                    ],
+                }),
+            ];
 
-            pass.end();
-            device.queue.submit([encoder.finish()]);
-        }
+            const pipelineLayout = device.createPipelineLayout({
+                label: 'cell pipeline layout',
+                bindGroupLayouts: [bindGroupLayout],
+            });
 
-        let updateInterval: ReturnType<typeof setInterval> | undefined;
+            const cellPipeline = device.createRenderPipeline({
+                label: 'cell pipeline',
+                layout: pipelineLayout,
+                vertex: {
+                    module: cellShaderModule,
+                    entryPoint: 'vertexMain',
+                    buffers: [vertexBufferLayout],
+                },
+                fragment: {
+                    module: cellShaderModule,
+                    entryPoint: 'fragmentMain',
+                    targets: [{ format }],
+                },
+            });
 
-        createEffect(() => {
-            const updateIntervalMs = 1000 / frameRate();
+            const simulationPipeline = device.createComputePipeline({
+                label: 'simulation pipeline',
+                layout: pipelineLayout,
+                compute: {
+                    module: simulationShaderModule,
+                    entryPoint: 'computeMain',
+                },
+            });
 
-            if (updateInterval !== undefined) {
-                clearInterval(updateInterval);
+            let step = 0;
+
+            resetListen(() => {
+                step = 0;
+                for (let i = 0; i < cellStateArray.length; i++) {
+                    cellStateArray[i] = Math.random() > 0.6 ? 1 : 0;
+                }
+                device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray);
+            });
+
+            function updateGrid() {
+                if (!context) return;
+
+                viewOffsetArray[0] = modulo(mouseOffsetX + mouseDragX, gameWidth);
+                viewOffsetArray[1] = -modulo(mouseOffsetY + mouseDragY, gameHeight);
+                device.queue.writeBuffer(viewOffsetStorage, 0, viewOffsetArray);
+
+                viewScaleArray[0] = (scale * gameWidth) / canvasSize().width;
+                viewScaleArray[1] = (scale * gameHeight) / canvasSize().height;
+                device.queue.writeBuffer(viewScaleStorage, 0, viewScaleArray);
+
+                const encoder = device.createCommandEncoder();
+
+                const computePass = encoder.beginComputePass();
+                computePass.setPipeline(simulationPipeline);
+                computePass.setBindGroup(0, bindGroups[step % 2]);
+                const workgroupCountX = Math.ceil(gameWidth / workgroupSize);
+                const workgroupCountY = Math.ceil(gameHeight / workgroupSize);
+                computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
+                computePass.end();
+
+                step++;
+                const pass = encoder.beginRenderPass({
+                    colorAttachments: [
+                        {
+                            view: context.getCurrentTexture().createView(),
+                            loadOp: 'clear',
+                            //clearValue: { r: 0.05, g: 0.05, b: 0.1, a: 1 },
+                            //clearValue: [0.05, 0.05, 0.1, 1],
+                            clearValue: [0, 0, 0, 1],
+                            storeOp: 'store',
+                        },
+                    ],
+                });
+
+                pass.setPipeline(cellPipeline);
+                pass.setVertexBuffer(0, vertexBuffer);
+                pass.setBindGroup(0, bindGroups[step % 2]);
+                // 2D points, so 2 points per vertex
+                // draw a grid full of instances
+                pass.draw(vertices.length / 2, gameWidth * gameHeight);
+
+                pass.end();
+                device.queue.submit([encoder.finish()]);
             }
 
-            updateInterval = setInterval(updateGrid, updateIntervalMs);
-        });
-    });
+            let updateInterval: ReturnType<typeof setInterval> | undefined;
+
+            createEffect(() => {
+                const updateIntervalMs = 1000 / frameRate();
+
+                if (updateInterval !== undefined) {
+                    clearInterval(updateInterval);
+                }
+
+                updateInterval = setInterval(updateGrid, updateIntervalMs);
+            });
+
+            return undefined;
+        }
+    );
 
     const onMouseDown = (event: MouseEvent) => {
         mouseStartX = event.clientX;
@@ -387,16 +396,30 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     };
 
     return (
-        <div {...rest} ref={setRef}>
-            <canvas
-                width={canvasSize().width}
-                height={canvasSize().height}
-                onMouseDown={onMouseDown}
-                onMouseMove={onMouseMove}
-                onMouseOut={onMouseUp}
-                onMouseUp={onMouseUp}
-                onWheel={onWheel}
-            />
-        </div>
+        <Switch>
+            <Match when={canvasError() !== undefined}>
+                <div class="m-4">
+                    <div>Unable to initialize canvas and WebGPU.</div>
+                    <div>{`Error: ${canvasError() ?? 'unknown'}`}</div>
+                    <div>
+                        You may need to update to the latest version of Chrome or Edge. Other
+                        browsers are not yet supported.
+                    </div>
+                </div>
+            </Match>
+            <Match when={true}>
+                <div {...rest} ref={setRef}>
+                    <canvas
+                        width={canvasSize().width}
+                        height={canvasSize().height}
+                        onMouseDown={onMouseDown}
+                        onMouseMove={onMouseMove}
+                        onMouseOut={onMouseUp}
+                        onMouseUp={onMouseUp}
+                        onWheel={onWheel}
+                    />
+                </div>
+            </Match>
+        </Switch>
     );
 };
