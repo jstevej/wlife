@@ -48,6 +48,9 @@ module.exports = {
     ],
     theme: {
         extend: {
+            borderColor: {
+                DEFAULT: colors.gray['700'],
+            },
             colors: {
                 bg: colors.gray['800'],
                 bghi: colors.gray['700'],

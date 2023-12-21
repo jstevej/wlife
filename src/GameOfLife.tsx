@@ -24,7 +24,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     const gameHeight = window.screen.height;
     const gameWidth = window.screen.width;
     const [, rest] = splitProps(props, ['foo']);
-    const { cellExtent, frameRate, resetListen } = useGameOfLife();
+    const { frameRate, resetListen } = useGameOfLife();
     const [ref, setRef] = createSignal<HTMLDivElement>();
     let mouseDragging = false;
     let mouseStartX = 0;
@@ -44,7 +44,6 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     createEffect(() => {
         const fooRef = ref();
         if (fooRef === undefined) return;
-        console.log(`registering resize observer`);
         const resizeObserver = new ResizeObserver(entries => {
             const rect = entries[0].contentRect;
             canvasSizeThrottle({
@@ -92,15 +91,15 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         const vertices = new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]);
         for (let i = 0; i < vertices.length; i += 2) {
-            vertices[i] *= cellExtent().width;
-            vertices[i + 1] *= cellExtent().height;
+            vertices[i] *= 1;
+            vertices[i + 1] *= 1;
         }
         const vertexBuffer = device.createBuffer({
             label: 'cell vertices',
             size: vertices.byteLength,
             usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
         });
-        device.queue.writeBuffer(vertexBuffer, /*bufferOffset=*/ 0, vertices);
+        device.queue.writeBuffer(vertexBuffer, 0, vertices);
         const vertexBufferLayout: GPUVertexBufferLayout = {
             arrayStride: 8, // 2 32-bit floats (one 2D point) = 8 bytes
             attributes: [
@@ -352,7 +351,6 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         createEffect(() => {
             const updateIntervalMs = 1000 / frameRate();
-            console.log(`frameRate = ${frameRate()}, updateIntervalMs = ${updateIntervalMs}`);
 
             if (updateInterval !== undefined) {
                 clearInterval(updateInterval);

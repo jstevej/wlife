@@ -7,15 +7,15 @@ export type Dimensions = {
 };
 
 function useGameOfLifeProvider() {
-    const [cellExtent, setCellExtent] = createSignal<Dimensions>({ height: 1, width: 1 });
     const [frameRate, setFrameRate] = createSignal(20);
+    const [paused, setPaused] = createSignal(false);
     const { listen: resetListen, emit: resetEmit } = createEventBus<void>(); // clear not used
 
     return {
-        cellExtent,
-        setCellExtent,
         frameRate,
         setFrameRate,
+        paused,
+        setPaused,
         resetListen,
         resetEmit,
     };
