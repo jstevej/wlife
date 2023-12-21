@@ -54,7 +54,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     const gameHeight = window.screen.height;
     const gameWidth = window.screen.width;
     const [, rest] = splitProps(props, ['foo']);
-    const { frameRate, resetListen } = useGameOfLife();
+    const { frameRate, resetListen, zoomIsInverted } = useGameOfLife();
     const [ref, setRef] = createSignal<HTMLDivElement>();
     let mouseDragging = false;
     let mouseClientX = 0;
@@ -436,8 +436,9 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     };
 
     const onWheel = (event: WheelEvent) => {
+        const invert = untrack(zoomIsInverted) ? -1 : 1;
         const direction = Math.sign(event.deltaY);
-        const newScale = Math.min(Math.max(scale + direction, 1), 15);
+        const newScale = Math.min(Math.max(scale + invert * direction, 1), 15);
         if (newScale === scale) return;
 
         const { width, height } = untrack(canvasSize);

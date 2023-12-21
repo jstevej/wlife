@@ -1,6 +1,26 @@
 import { Component, createEffect, createSignal, JSX } from 'solid-js';
 import { useGameOfLife } from './GameOfLifeProvider';
 
+type CheckboxProps = {
+    label: string;
+    onChange: (checked: boolean) => void;
+    value: boolean;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onChange'>;
+
+const Checkbox: Component<CheckboxProps> = props => {
+    const onChange = (event: Event) => {
+        const target = event.target as HTMLInputElement | null;
+        props.onChange(target?.checked ?? false);
+    };
+
+    return (
+        <div>
+            <input type="checkbox" checked={props.value} onChange={onChange} />
+            <label class="ml-2">{props.label}</label>
+        </div>
+    );
+};
+
 type SliderProps = {
     displayValue?: string;
     max: number;
@@ -36,7 +56,8 @@ const Slider: Component<SliderProps> = props => {
 };
 
 export const Controls: Component = () => {
-    const { frameRate, resetEmit, setFrameRate } = useGameOfLife();
+    const { frameRate, resetEmit, setFrameRate, setZoomIsInverted, zoomIsInverted } =
+        useGameOfLife();
     const [sliderFrameRate, setSliderFrameRate] = createSignal(20);
 
     createEffect(() => {
@@ -60,6 +81,7 @@ export const Controls: Component = () => {
                 onInput={onFrameRateSliderChanged}
                 value={sliderFrameRate()}
             />
+            <Checkbox label="Invert Zoom" value={zoomIsInverted()} onChange={setZoomIsInverted} />
             <div>
                 <div class="flex flex-col mt-1">
                     <button onClick={() => resetEmit()}>Restart</button>
