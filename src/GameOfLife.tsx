@@ -8,6 +8,7 @@ import {
     Match,
     splitProps,
     Switch,
+    untrack,
 } from 'solid-js';
 import cellShaderCode from './CellShader.wgsl?raw';
 import { useGameOfLife } from './GameOfLifeProvider';
@@ -56,6 +57,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     const { frameRate, resetListen } = useGameOfLife();
     const [ref, setRef] = createSignal<HTMLDivElement>();
     let mouseDragging = false;
+    let mouseClientX = 0;
+    let mouseClientY = 0;
     let mouseStartX = 0;
     let mouseStartY = 0;
     let mouseDragX = 0;
@@ -420,6 +423,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             mouseDragX = (event.clientX - mouseStartX) / scale;
             mouseDragY = (event.clientY - mouseStartY) / scale;
         }
+        mouseClientX = event.clientX;
+        mouseClientY = event.clientY;
     };
 
     const onMouseUp = (event: MouseEvent) => {
@@ -431,7 +436,16 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     };
 
     const onWheel = (event: WheelEvent) => {
-        scale = Math.min(Math.max(scale + Math.sign(event.deltaY), 1), 15);
+        const direction = Math.sign(event.deltaY);
+        const newScale = Math.min(Math.max(scale + direction, 1), 15);
+        if (newScale === scale) return;
+
+        const { width, height } = untrack(canvasSize);
+        const dragX = ((1 - newScale / scale) * (mouseClientX - 0.5 * width)) / newScale;
+        const dragY = ((1 - newScale / scale) * (mouseClientY - 0.5 * height)) / newScale;
+        mouseOffsetX = modulo(mouseOffsetX + dragX, gameWidth);
+        mouseOffsetY = modulo(mouseOffsetY + dragY, gameHeight);
+        scale = newScale;
         event.preventDefault();
     };
 
