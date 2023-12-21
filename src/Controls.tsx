@@ -56,8 +56,14 @@ const Slider: Component<SliderProps> = props => {
 };
 
 export const Controls: Component = () => {
-    const { frameRate, resetEmit, setFrameRate, setZoomIsInverted, zoomIsInverted } =
-        useGameOfLife();
+    const {
+        actualFrameRate,
+        frameRate,
+        resetEmit,
+        setFrameRate,
+        setZoomIsInverted,
+        zoomIsInverted,
+    } = useGameOfLife();
     const [sliderFrameRate, setSliderFrameRate] = createSignal(20);
 
     createEffect(() => {
@@ -87,6 +93,7 @@ export const Controls: Component = () => {
                     <button onClick={() => resetEmit()}>Restart</button>
                 </div>
             </div>
+            <div>{`Actual: ${actualFrameRate().toFixed(1)} fps`}</div>
         </div>
     );
 };

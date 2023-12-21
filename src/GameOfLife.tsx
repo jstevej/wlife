@@ -54,7 +54,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     const gameHeight = window.screen.height;
     const gameWidth = window.screen.width;
     const [, rest] = splitProps(props, ['foo']);
-    const { frameRate, resetListen, zoomIsInverted } = useGameOfLife();
+    const { frameRate, resetListen, setActualFrameRate, zoomIsInverted } = useGameOfLife();
     const [ref, setRef] = createSignal<HTMLDivElement>();
     let mouseDragging = false;
     let mouseClientX = 0;
@@ -74,6 +74,9 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     );
     let updateTimeout: ReturnType<typeof setTimeout> | undefined;
     let animationFrameRequest: ReturnType<typeof requestAnimationFrame> | undefined;
+    const frameTimesMs = new Array<number>(60).fill(1000);
+    let prevFrameTime = Date.now();
+    let frameScheduleDelayMs = 1000 / 20;
 
     createEffect(() => {
         const fooRef = ref();
@@ -87,6 +90,18 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         });
         resizeObserver.observe(fooRef);
     });
+
+    setInterval(() => {
+        const fr = untrack(frameRate);
+        const startIndex = Math.max(frameTimesMs.length - fr, 0);
+        let timeMs = 0;
+
+        for (let i = startIndex; i < frameTimesMs.length; i++) {
+            timeMs += frameTimesMs[i];
+        }
+
+        setActualFrameRate((1000 * (frameTimesMs.length - startIndex)) / timeMs);
+    }, 1000);
 
     const [gpuData] = createResource<GpuData | string>(async (): Promise<GpuData | string> => {
         // Setup canvas.
@@ -336,17 +351,22 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     });
 
     const scheduleNextFrame = () => {
-        const frameTimestamp = Date.now();
         updateTimeout = undefined;
 
         animationFrameRequest = requestAnimationFrame(() => {
             animationFrameRequest = undefined;
-            updateGrid();
+            const currFrameTime = Date.now();
+            const measuredFrameDurationMs = currFrameTime - prevFrameTime;
+            frameTimesMs.shift();
+            frameTimesMs.push(measuredFrameDurationMs);
             const fr = untrack(frameRate);
             const frameDurationMs = 1000 / fr;
-            const elapsedMs = Date.now() - frameTimestamp;
-            const timeoutMs = Math.max(frameDurationMs - elapsedMs, 0);
-            updateTimeout = setTimeout(scheduleNextFrame, timeoutMs);
+            updateGrid();
+            const frameDiffMs = frameDurationMs - measuredFrameDurationMs;
+            frameScheduleDelayMs += frameDiffMs;
+            frameScheduleDelayMs = Math.max(frameScheduleDelayMs, 0);
+            prevFrameTime = currFrameTime;
+            updateTimeout = setTimeout(scheduleNextFrame, frameScheduleDelayMs);
         });
     };
 
