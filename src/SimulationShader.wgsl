@@ -1,6 +1,6 @@
 @group(0) @binding(0) var<uniform> gridSize: vec2f;
-@group(0) @binding(3) var<storage> cellStateIn: array<u32>;
-@group(0) @binding(4) var<storage, read_write> cellStateOut: array<u32>;
+@group(0) @binding(4) var<storage> cellStateIn: array<u32>;
+@group(0) @binding(5) var<storage, read_write> cellStateOut: array<u32>;
 
 fn cellIndex(cell: vec2u) -> u32 {
     return cell.y * u32(gridSize.x) + cell.x;
@@ -16,7 +16,6 @@ const rules: array<u32, 9> = array(0, 0, 2, 3, 0, 0, 0, 0, 0);
 //const rules: array<u32, 9> = array(0, 0, 2, 2, 3, 0, 0, 0, 0); // jenn's rules
 
 fn modulo(x: i32, n: u32) -> u32 {
-    //return u32(((x % n) + n) % n);
     // assume n is positive, then use floored division
     return u32(i32(x) - i32(n) * i32(floor(f32(x) / f32(n))));
 }

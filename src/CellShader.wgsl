@@ -8,10 +8,15 @@ struct VertexOutput {
     @location(0) cell: vec2f,
 };
 
+struct SimParams {
+    showAxes: f32,
+};
+
 @group(0) @binding(0) var<uniform> gridSize: vec2f;
 @group(0) @binding(1) var<storage> viewScale: vec2f;
 @group(0) @binding(2) var<storage> viewOffset: vec2f;
-@group(0) @binding(3) var<storage> cellState: array<u32>;
+@group(0) @binding(3) var<storage> simParams: SimParams;
+@group(0) @binding(4) var<storage> cellState: array<u32>;
 
 fn modulo(x: vec2f, n: vec2f) -> vec2f {
     //return ((x % n) + n) % n;
@@ -23,7 +28,7 @@ fn modulo(x: vec2f, n: vec2f) -> vec2f {
 fn vertexMain(input: VertexInput) -> VertexOutput {
     let i = f32(input.instance);
     let cell = vec2f(i % gridSize.x, floor(i / gridSize.x));
-    let state = f32(cellState[input.instance] > 0 || cell.x == 0 || cell.y == 0);
+    let state = f32(cellState[input.instance] > 0 || (simParams.showAxes > 0 && (cell.x == 0 || cell.y == 0)));
     let offsetCell = modulo(cell + viewOffset, gridSize);
     let gridPos = state * (((input.pos + 1 + 2 * offsetCell) / gridSize) - 1) * viewScale;
 

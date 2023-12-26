@@ -33,6 +33,8 @@ type GpuData = {
     gridSizeArray: Float32Array;
     gridSizeBuffer: GPUBuffer;
     step: number;
+    simulationParamsArray: Float32Array;
+    simulationParamsStorage: GPUBuffer;
     simulationPipeline: GPUComputePipeline;
     vertexBuffer: GPUBuffer;
     vertices: Float32Array;
@@ -54,7 +56,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     const gameHeight = window.screen.height;
     const gameWidth = window.screen.width;
     const [, rest] = splitProps(props, ['foo']);
-    const { frameRate, resetListen, setActualFrameRate, zoomIsInverted } = useGameOfLife();
+    const { frameRate, resetListen, setActualFrameRate, showAxes, zoomIsInverted } = useGameOfLife();
     const [ref, setRef] = createSignal<HTMLDivElement>();
     let mouseDragging = false;
     let mouseClientX = 0;
@@ -124,8 +126,6 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         const format = navigator.gpu.getPreferredCanvasFormat();
         context.configure({ device, format });
 
-        // Vertex stuff.
-
         const vertices = new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]);
         for (let i = 0; i < vertices.length; i += 2) {
             vertices[i] *= 1;
@@ -176,6 +176,14 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         });
         device.queue.writeBuffer(viewOffsetStorage, 0, viewOffsetArray);
 
+        const simulationParamsArray = new Float32Array([0.0]);
+        const simulationParamsStorage = device.createBuffer({
+            label: 'simulationParams storage',
+            size: simulationParamsArray.byteLength,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        device.queue.writeBuffer(simulationParamsStorage, 0, simulationParamsArray);
+
         const cellStateArray = new Uint32Array(gameWidth * gameHeight);
         const cellStateStorage = [
             device.createBuffer({
@@ -221,24 +229,28 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                 },
                 {
                     binding: 1,
-                    visibility:
-                        GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                    visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
                     buffer: { type: 'read-only-storage' },
                 },
                 {
                     binding: 2,
-                    visibility:
-                        GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                    visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
                     buffer: { type: 'read-only-storage' },
                 },
                 {
                     binding: 3,
                     visibility:
                         GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
-                    buffer: { type: 'read-only-storage' }, // cell state input buffer
+                    buffer: { type: 'read-only-storage' },
                 },
                 {
                     binding: 4,
+                    visibility:
+                        GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                    buffer: { type: 'read-only-storage' }, // cell state input buffer
+                },
+                {
+                    binding: 5,
                     visibility: GPUShaderStage.COMPUTE,
                     buffer: { type: 'storage' }, // cell state output buffer
                 },
@@ -264,10 +276,14 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                     },
                     {
                         binding: 3,
-                        resource: { buffer: cellStateStorage[0] },
+                        resource: { buffer: simulationParamsStorage },
                     },
                     {
                         binding: 4,
+                        resource: { buffer: cellStateStorage[0] },
+                    },
+                    {
+                        binding: 5,
                         resource: { buffer: cellStateStorage[1] },
                     },
                 ],
@@ -290,10 +306,14 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                     },
                     {
                         binding: 3,
-                        resource: { buffer: cellStateStorage[1] },
+                        resource: { buffer: simulationParamsStorage },
                     },
                     {
                         binding: 4,
+                        resource: { buffer: cellStateStorage[1] },
+                    },
+                    {
+                        binding: 5,
                         resource: { buffer: cellStateStorage[0] },
                     },
                 ],
@@ -339,6 +359,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             gridSizeArray,
             gridSizeBuffer,
             step: 0,
+            simulationParamsArray,
+            simulationParamsStorage,
             simulationPipeline,
             vertexBuffer,
             vertices,
@@ -382,6 +404,20 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         if (updateTimeout !== undefined) clearTimeout(updateTimeout);
 
         updateTimeout = setTimeout(scheduleNextFrame, updateTimeoutMs);
+    });
+
+    createEffect(() => {
+        const data = gpuData();
+        const showAxesValue = showAxes() ? 1.0 : 0.0;
+
+        if (data === undefined || typeof data === 'string') return;
+
+        data.simulationParamsArray[0] = showAxesValue;
+        data.device.queue.writeBuffer(data.simulationParamsStorage, 0, data.simulationParamsArray);
+
+
+
+
     });
 
     resetListen(() => {

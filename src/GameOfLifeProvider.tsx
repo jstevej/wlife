@@ -11,6 +11,7 @@ function useGameOfLifeProvider() {
     const [frameRate, setFrameRate] = createSignal(20);
     const [paused, setPaused] = createSignal(false);
     const [zoomIsInverted, setZoomIsInverted] = createSignal(false);
+    const [showAxes, setShowAxes] = createSignal(false);
     const { listen: resetListen, emit: resetEmit } = createEventBus<void>(); // clear not used
 
     return {
@@ -22,6 +23,8 @@ function useGameOfLifeProvider() {
         setPaused,
         zoomIsInverted,
         setZoomIsInverted,
+        showAxes,
+        setShowAxes,
         resetListen,
         resetEmit,
     };

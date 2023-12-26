@@ -63,6 +63,8 @@ export const Controls: Component = () => {
         setFrameRate,
         setZoomIsInverted,
         zoomIsInverted,
+        showAxes,
+        setShowAxes,
     } = useGameOfLife();
     const [sliderFrameRate, setSliderFrameRate] = createSignal(20);
 
@@ -88,6 +90,7 @@ export const Controls: Component = () => {
                 value={sliderFrameRate()}
             />
             <Checkbox label="Invert Zoom" value={zoomIsInverted()} onChange={setZoomIsInverted} />
+            <Checkbox label="Show Axes" value={showAxes()} onChange={setShowAxes} />
             <div>
                 <div class="flex flex-col mt-1">
                     <button onClick={() => resetEmit()}>Restart</button>
