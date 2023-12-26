@@ -1,5 +1,6 @@
-import { Component, createEffect, createSignal, JSX } from 'solid-js';
+import { Component, createEffect, createSignal, For, JSX } from 'solid-js';
 import { useGameOfLife } from './GameOfLifeProvider';
+import { getGradientName, gradientNames, isGradientName } from './Gradients';
 
 type CheckboxProps = {
     label: string;
@@ -17,6 +18,35 @@ const Checkbox: Component<CheckboxProps> = props => {
         <div>
             <input type="checkbox" checked={props.value} onChange={onChange} />
             <label class="ml-2">{props.label}</label>
+        </div>
+    );
+};
+
+type SelectProps = {
+    currentValue: string;
+    onChange: (value: string | undefined) => void;
+    options: Array<[string, string]>; // value, display name
+    title: string;
+} & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onChange'>;
+
+const Select: Component<SelectProps> = props => {
+    const onChange = (event: Event) => {
+        const target = event.target as HTMLSelectElement | null;
+        props.onChange(target?.value ?? undefined);
+    };
+
+    return (
+        <div class="flex flex-row space-x-2">
+            <div>{`${props.title}:`}</div>
+            <select onChange={onChange}>
+                <For each={props.options}>
+                    {opt => (
+                        <option value={opt[0]} selected={opt[0] === props.currentValue}>
+                            {opt[1]}
+                        </option>
+                    )}
+                </For>
+            </select>
         </div>
     );
 };
@@ -59,7 +89,9 @@ export const Controls: Component = () => {
     const {
         actualFrameRate,
         frameRate,
+        gradientName,
         resetEmit,
+        setGradientName,
         setFrameRate,
         setZoomIsInverted,
         zoomIsInverted,
@@ -78,7 +110,7 @@ export const Controls: Component = () => {
     };
 
     return (
-        <div class="flex flex-col mx-2 divide-y divide-solid w-48">
+        <div class="flex flex-col mx-2 divide-y divide-solid">
             <h1>Controls</h1>
             <Slider
                 title="Frame Rate"
@@ -90,6 +122,14 @@ export const Controls: Component = () => {
                 value={sliderFrameRate()}
             />
             <Checkbox label="Invert Zoom" value={zoomIsInverted()} onChange={setZoomIsInverted} />
+            <Select
+                title="Gradient"
+                options={gradientNames.map(name => [name, getGradientName(name)])}
+                currentValue={gradientName()}
+                onChange={value => {
+                    if (isGradientName(value)) setGradientName(value);
+                }}
+            />
             <Checkbox label="Show Axes" value={showAxes()} onChange={setShowAxes} />
             <div>
                 <div class="flex flex-col mt-1">

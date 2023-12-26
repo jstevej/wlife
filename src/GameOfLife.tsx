@@ -12,6 +12,7 @@ import {
 } from 'solid-js';
 import cellShaderCode from './CellShader.wgsl?raw';
 import { useGameOfLife } from './GameOfLifeProvider';
+import { getGradientValues } from './Gradients';
 import simulationShaderCode from './SimulationShader.wgsl?raw';
 
 export type GameOfLifeProps = {
@@ -25,6 +26,7 @@ type Dimensions = {
 
 type GpuData = {
     bindGroups: Array<GPUBindGroup>;
+    cellGradientStorage: GPUBuffer;
     cellPipeline: GPURenderPipeline;
     cellStateArray: Uint32Array;
     cellStateStorage: Array<GPUBuffer>;
@@ -52,11 +54,14 @@ function modulo(x: number, n: number): number {
     return ((x % n) + n) % n;
 }
 
+const maxAge = 100;
+
 export const GameOfLife: Component<GameOfLifeProps> = props => {
     const gameHeight = window.screen.height;
     const gameWidth = window.screen.width;
     const [, rest] = splitProps(props, ['foo']);
-    const { frameRate, resetListen, setActualFrameRate, showAxes, zoomIsInverted } = useGameOfLife();
+    const { frameRate, resetListen, setActualFrameRate, showAxes, gradientName, zoomIsInverted } =
+        useGameOfLife();
     const [ref, setRef] = createSignal<HTMLDivElement>();
     let mouseDragging = false;
     let mouseClientX = 0;
@@ -184,6 +189,17 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         });
         device.queue.writeBuffer(simulationParamsStorage, 0, simulationParamsArray);
 
+        const cellGradientStorage = device.createBuffer({
+            label: 'cellGradient storage',
+            size: 3 * (maxAge + 1) * 4,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+        device.queue.writeBuffer(
+            cellGradientStorage,
+            0,
+            getGradientValues(untrack(gradientName), maxAge)
+        );
+
         const cellStateArray = new Uint32Array(gameWidth * gameHeight);
         const cellStateStorage = [
             device.createBuffer({
@@ -245,12 +261,17 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                 },
                 {
                     binding: 4,
+                    visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+                    buffer: { type: 'read-only-storage' },
+                },
+                {
+                    binding: 5,
                     visibility:
                         GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
                     buffer: { type: 'read-only-storage' }, // cell state input buffer
                 },
                 {
-                    binding: 5,
+                    binding: 6,
                     visibility: GPUShaderStage.COMPUTE,
                     buffer: { type: 'storage' }, // cell state output buffer
                 },
@@ -280,10 +301,14 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                     },
                     {
                         binding: 4,
-                        resource: { buffer: cellStateStorage[0] },
+                        resource: { buffer: cellGradientStorage },
                     },
                     {
                         binding: 5,
+                        resource: { buffer: cellStateStorage[0] },
+                    },
+                    {
+                        binding: 6,
                         resource: { buffer: cellStateStorage[1] },
                     },
                 ],
@@ -310,10 +335,14 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                     },
                     {
                         binding: 4,
-                        resource: { buffer: cellStateStorage[1] },
+                        resource: { buffer: cellGradientStorage },
                     },
                     {
                         binding: 5,
+                        resource: { buffer: cellStateStorage[1] },
+                    },
+                    {
+                        binding: 6,
                         resource: { buffer: cellStateStorage[0] },
                     },
                 ],
@@ -351,6 +380,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         return {
             bindGroups,
+            cellGradientStorage,
             cellPipeline,
             cellStateArray,
             cellStateStorage,
@@ -414,10 +444,19 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         data.simulationParamsArray[0] = showAxesValue;
         data.device.queue.writeBuffer(data.simulationParamsStorage, 0, data.simulationParamsArray);
+    });
 
+    createEffect(() => {
+        const data = gpuData();
+        const gradientNameValue = gradientName();
 
+        if (data === undefined || typeof data === 'string') return;
 
-
+        data.device.queue.writeBuffer(
+            data.cellGradientStorage,
+            0,
+            getGradientValues(gradientNameValue, maxAge)
+        );
     });
 
     resetListen(() => {

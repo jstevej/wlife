@@ -1,5 +1,6 @@
 import { createEventBus } from '@solid-primitives/event-bus';
 import { createContext, createSignal, ParentComponent, useContext } from 'solid-js';
+import { GradientName } from './Gradients';
 
 export type Dimensions = {
     height: number;
@@ -12,6 +13,7 @@ function useGameOfLifeProvider() {
     const [paused, setPaused] = createSignal(false);
     const [zoomIsInverted, setZoomIsInverted] = createSignal(false);
     const [showAxes, setShowAxes] = createSignal(false);
+    const [gradientName, setGradientName] = createSignal<GradientName>('jet');
     const { listen: resetListen, emit: resetEmit } = createEventBus<void>(); // clear not used
 
     return {
@@ -25,6 +27,8 @@ function useGameOfLifeProvider() {
         setZoomIsInverted,
         showAxes,
         setShowAxes,
+        gradientName,
+        setGradientName,
         resetListen,
         resetEmit,
     };
