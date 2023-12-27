@@ -1,6 +1,6 @@
 @group(0) @binding(0) var<uniform> gridSize: vec2f;
-@group(0) @binding(5) var<storage> cellStateIn: array<u32>;
-@group(0) @binding(6) var<storage, read_write> cellStateOut: array<u32>;
+@group(0) @binding(5) var<storage> cellStateIn: array<i32>;
+@group(0) @binding(6) var<storage, read_write> cellStateOut: array<i32>;
 
 fn cellIndex(cell: vec2u) -> u32 {
     return cell.y * u32(gridSize.x) + cell.x;
@@ -38,7 +38,8 @@ fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
         cellAlive(left, bottom) +
         cellAlive(cell.x, bottom) +
         cellAlive(right, bottom);
-    let value = (rules[numNeighbors] >> cellAlive(cell.x, cell.y)) & 0x01;
+    let value = i32((rules[numNeighbors] >> cellAlive(cell.x, cell.y)) & 0x01);
     let i = cellIndex(cell.xy);
-    cellStateOut[i] = cellStateIn[i] * value + value;
+    let prev = cellStateIn[i];
+    cellStateOut[i] = i32(prev >= 0) * prev * value + value + i32(prev <= 0) * (1 - value) * (prev - 1);
 }

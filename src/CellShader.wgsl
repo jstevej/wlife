@@ -10,15 +10,15 @@ struct VertexOutput {
 
 struct SimParams {
     showAxes: f32,
+    showBackgroundAge: f32,
 };
 
 @group(0) @binding(0) var<uniform> gridSize: vec2f;
 @group(0) @binding(1) var<storage> viewScale: vec2f;
 @group(0) @binding(2) var<storage> viewOffset: vec2f;
 @group(0) @binding(3) var<storage> simParams: SimParams;
-//@group(0) @binding(4) var<storage> cellGradient: array<vec3f>;
 @group(0) @binding(4) var<storage> cellGradient: array<f32>;
-@group(0) @binding(5) var<storage> cellState: array<u32>;
+@group(0) @binding(5) var<storage> cellState: array<i32>;
 
 fn modulo(x: vec2f, n: vec2f) -> vec2f {
     //return ((x % n) + n) % n;
@@ -30,9 +30,8 @@ fn modulo(x: vec2f, n: vec2f) -> vec2f {
 fn vertexMain(input: VertexInput) -> VertexOutput {
     let i = f32(input.instance);
     let cell = vec2f(i % gridSize.x, floor(i / gridSize.x));
-    let state = f32(cellState[input.instance] > 0 || (simParams.showAxes > 0 && (cell.x == 0 || cell.y == 0)));
     let offsetCell = modulo(cell + viewOffset, gridSize);
-    let gridPos = state * (((input.pos + 1 + 2 * offsetCell) / gridSize) - 1) * viewScale;
+    let gridPos = (((input.pos + 1 + 2 * offsetCell) / gridSize) - 1) * viewScale;
 
     var output: VertexOutput;
     output.pos = vec4f(gridPos, 0, 1);
@@ -54,11 +53,11 @@ fn cellIndex(cell: vec2f) -> u32 {
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
     let i = cellIndex(input.cell);
     let state = f32(cellState[i] > 0);
-    let age = min(cellState[i], 100);
+    let age = max(min(cellState[i], 100), -100);
     let axisColor = vec3f(0.0, 1.0, 0.0);
-    let cellColor = vec3f(cellGradient[3 * age], cellGradient[3 * age + 1], cellGradient[3 * age + 2]);
-    let rgb = state * cellColor + (1 - state) * axisColor;
-    //let hue = 0.667 * min(f32(cellState[i]) / 100.0, 1.0);
-    //let rgb = hsl2rgb(vec3f(state * hue + (1 - state) * 0.333, 0.9, 0.5));
+    let isAxis = (1 - state) * simParams.showAxes * f32(input.cell.x == 0 || input.cell.y == 0);
+    let f = state + (1 - state) * 0.2 * simParams.showBackgroundAge;
+    let cellColor = f * vec3f(cellGradient[3 * abs(age)], cellGradient[3 * abs(age) + 1], cellGradient[3 * abs(age) + 2]);
+    let rgb = (1 - isAxis) * cellColor + isAxis * axisColor;
     return vec4f(rgb,  1);
 }

@@ -28,7 +28,7 @@ type GpuData = {
     bindGroups: Array<GPUBindGroup>;
     cellGradientStorage: GPUBuffer;
     cellPipeline: GPURenderPipeline;
-    cellStateArray: Uint32Array;
+    cellStateArray: Int32Array;
     cellStateStorage: Array<GPUBuffer>;
     context: GPUCanvasContext;
     device: GPUDevice;
@@ -60,8 +60,15 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     const gameHeight = window.screen.height;
     const gameWidth = window.screen.width;
     const [, rest] = splitProps(props, ['foo']);
-    const { frameRate, resetListen, setActualFrameRate, showAxes, gradientName, zoomIsInverted } =
-        useGameOfLife();
+    const {
+        frameRate,
+        resetListen,
+        setActualFrameRate,
+        showAxes,
+        showBackgroundAge,
+        gradientName,
+        zoomIsInverted,
+    } = useGameOfLife();
     const [ref, setRef] = createSignal<HTMLDivElement>();
     let mouseDragging = false;
     let mouseClientX = 0;
@@ -181,7 +188,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         });
         device.queue.writeBuffer(viewOffsetStorage, 0, viewOffsetArray);
 
-        const simulationParamsArray = new Float32Array([0.0]);
+        const simulationParamsArray = new Float32Array([0.0, 0.0]);
         const simulationParamsStorage = device.createBuffer({
             label: 'simulationParams storage',
             size: simulationParamsArray.byteLength,
@@ -200,7 +207,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             getGradientValues(untrack(gradientName), maxAge)
         );
 
-        const cellStateArray = new Uint32Array(gameWidth * gameHeight);
+        const cellStateArray = new Int32Array(gameWidth * gameHeight);
         const cellStateStorage = [
             device.createBuffer({
                 label: 'cell state ping',
@@ -443,6 +450,16 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         if (data === undefined || typeof data === 'string') return;
 
         data.simulationParamsArray[0] = showAxesValue;
+        data.device.queue.writeBuffer(data.simulationParamsStorage, 0, data.simulationParamsArray);
+    });
+
+    createEffect(() => {
+        const data = gpuData();
+        const showBackgroundAgeValue = showBackgroundAge() ? 1.0 : 0.0;
+
+        if (data === undefined || typeof data === 'string') return;
+
+        data.simulationParamsArray[1] = showBackgroundAgeValue;
         data.device.queue.writeBuffer(data.simulationParamsStorage, 0, data.simulationParamsArray);
     });
 

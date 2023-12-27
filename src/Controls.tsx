@@ -97,6 +97,8 @@ export const Controls: Component = () => {
         zoomIsInverted,
         showAxes,
         setShowAxes,
+        showBackgroundAge,
+        setShowBackgroundAge,
     } = useGameOfLife();
     const [sliderFrameRate, setSliderFrameRate] = createSignal(20);
 
@@ -131,6 +133,11 @@ export const Controls: Component = () => {
                 }}
             />
             <Checkbox label="Show Axes" value={showAxes()} onChange={setShowAxes} />
+            <Checkbox
+                label="Background Age"
+                value={showBackgroundAge()}
+                onChange={setShowBackgroundAge}
+            />
             <div>
                 <div class="flex flex-col mt-1">
                     <button onClick={() => resetEmit()}>Restart</button>
