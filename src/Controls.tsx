@@ -87,12 +87,13 @@ const Slider: Component<SliderProps> = props => {
 
 export const Controls: Component = () => {
     const {
-        actualFrameRate,
-        frameRate,
+        actualComputeFrameRate,
+        actualRenderFrameRate,
+        computeFrameRate,
         gradientName,
         resetEmit,
         setGradientName,
-        setFrameRate,
+        setComputeFrameRate,
         setZoomIsInverted,
         zoomIsInverted,
         showAxes,
@@ -104,7 +105,7 @@ export const Controls: Component = () => {
 
     createEffect(() => {
         const fr = sliderFrameRate();
-        setFrameRate(fr > 0 ? fr : 1);
+        setComputeFrameRate(fr > 0 ? fr : 1);
     });
 
     const onFrameRateSliderChanged = (value: number) => {
@@ -116,7 +117,7 @@ export const Controls: Component = () => {
             <h1>Controls</h1>
             <Slider
                 title="Frame Rate"
-                displayValue={`${frameRate()} fps`}
+                displayValue={`${computeFrameRate()} fps`}
                 min={0}
                 max={60}
                 step={5}
@@ -143,7 +144,10 @@ export const Controls: Component = () => {
                     <button onClick={() => resetEmit()}>Restart</button>
                 </div>
             </div>
-            <div>{`Actual: ${actualFrameRate().toFixed(1)} fps`}</div>
+            <div>
+                <div>{`Render: ${actualRenderFrameRate().toFixed(1)} fps`}</div>
+                <div>{`Compute: ${actualComputeFrameRate().toFixed(1)} fps`}</div>
+            </div>
         </div>
     );
 };

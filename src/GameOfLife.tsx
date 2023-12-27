@@ -63,9 +63,10 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     const gameWidth = window.screen.width;
     const [, rest] = splitProps(props, ['foo']);
     const {
-        frameRate,
+        computeFrameRate,
         resetListen,
-        setActualFrameRate,
+        setActualComputeFrameRate,
+        setActualRenderFrameRate,
         showAxes,
         showBackgroundAge,
         gradientName,
@@ -88,11 +89,15 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         (dim: Dimensions) => setCanvasSize(dim),
         500
     );
-    let updateTimeout: ReturnType<typeof setTimeout> | undefined;
     let animationFrameRequest: ReturnType<typeof requestAnimationFrame> | undefined;
-    const frameTimesMs = new Array<number>(60).fill(1000);
-    let prevFrameTime = Date.now();
+    const computeFrameTimesMs = new Array<number>(60).fill(1000);
+    const renderFrameTimesMs = new Array<number>(60).fill(1000);
+    let prevRenderFrameTime = Date.now();
+    let prevComputeFrameTime = Date.now();
+    let updateTimeout: ReturnType<typeof setTimeout> | undefined;
+    const minRenderFrameRate = 30;
     let frameScheduleDelayMs = 1000 / 20;
+    let frame = 0;
 
     createEffect(() => {
         const fooRef = ref();
@@ -108,15 +113,23 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     });
 
     setInterval(() => {
-        const fr = untrack(frameRate);
-        const startIndex = Math.max(frameTimesMs.length - fr, 0);
+        const fr = untrack(computeFrameRate);
+        const startIndex = Math.max(computeFrameTimesMs.length - fr, 0);
         let timeMs = 0;
 
-        for (let i = startIndex; i < frameTimesMs.length; i++) {
-            timeMs += frameTimesMs[i];
+        for (let i = startIndex; i < computeFrameTimesMs.length; i++) {
+            timeMs += computeFrameTimesMs[i];
         }
 
-        setActualFrameRate((1000 * (frameTimesMs.length - startIndex)) / timeMs);
+        setActualComputeFrameRate((1000 * (computeFrameTimesMs.length - startIndex)) / timeMs);
+
+        timeMs = 0;
+
+        for (const frameTimeMs of renderFrameTimesMs) {
+            timeMs += frameTimeMs;
+        }
+
+        setActualRenderFrameRate((1000 * renderFrameTimesMs.length) / timeMs);
     }, 1000);
 
     const [gpuData] = createResource<GpuData | string>(async (): Promise<GpuData | string> => {
@@ -411,38 +424,55 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         };
     });
 
+    const framesPerCompute = () => {
+        if (computeFrameRate() > minRenderFrameRate) {
+            return 1;
+        }
+
+        return Math.ceil(minRenderFrameRate / computeFrameRate());
+    };
+
     const scheduleNextFrame = () => {
         updateTimeout = undefined;
 
         animationFrameRequest = requestAnimationFrame(() => {
-            animationFrameRequest = undefined;
             const currFrameTime = Date.now();
-            const measuredFrameDurationMs = currFrameTime - prevFrameTime;
-            frameTimesMs.shift();
-            frameTimesMs.push(measuredFrameDurationMs);
-            const fr = untrack(frameRate);
-            const frameDurationMs = 1000 / fr;
-            updateGrid();
-            const frameDiffMs = frameDurationMs - measuredFrameDurationMs;
-            frameScheduleDelayMs += frameDiffMs;
-            frameScheduleDelayMs = Math.max(frameScheduleDelayMs, 0);
-            prevFrameTime = currFrameTime;
+            animationFrameRequest = undefined;
+            const doCompute = frame === 0;
+            const untrackedFramesPerCompute = untrack(framesPerCompute);
+
+            updateGrid(doCompute);
+
+            if (doCompute) {
+                const measuredComputeFrameDurationMs = currFrameTime - prevComputeFrameTime;
+                const targetComputeFrameDurationMs = 1000 / untrack(computeFrameRate);
+                const frameDiffMs = targetComputeFrameDurationMs - measuredComputeFrameDurationMs;
+
+                computeFrameTimesMs.shift();
+                computeFrameTimesMs.push(measuredComputeFrameDurationMs);
+                prevComputeFrameTime = currFrameTime;
+
+                frameScheduleDelayMs += frameDiffMs / untrackedFramesPerCompute;
+                frameScheduleDelayMs = Math.max(frameScheduleDelayMs, 0);
+            }
+
+            frame = ++frame % untrackedFramesPerCompute;
+            renderFrameTimesMs.shift();
+            renderFrameTimesMs.push(currFrameTime - prevRenderFrameTime);
+            prevRenderFrameTime = currFrameTime;
+
             updateTimeout = setTimeout(scheduleNextFrame, frameScheduleDelayMs);
         });
     };
 
     createEffect(() => {
         const data = gpuData();
-        const fr = frameRate();
 
         if (data === undefined || typeof data === 'string') return;
 
-        const updateTimeoutMs = 1000 / fr;
-
         if (animationFrameRequest !== undefined) cancelAnimationFrame(animationFrameRequest);
         if (updateTimeout !== undefined) clearTimeout(updateTimeout);
-
-        updateTimeout = setTimeout(scheduleNextFrame, updateTimeoutMs);
+        updateTimeout = setTimeout(scheduleNextFrame, 1);
     });
 
     createEffect(() => {
@@ -492,10 +522,12 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         data.device.queue.writeBuffer(data.cellStateStorage[0], 0, data.cellStateArray);
     });
 
-    const updateGrid = () => {
+    const updateGrid = (doCompute: boolean) => {
         const data = gpuData();
 
         if (data === undefined || typeof data === 'string') return;
+
+        const encoder = data.device.createCommandEncoder();
 
         data.viewOffsetArray[0] = modulo(mouseOffsetX + mouseDragX, gameWidth);
         data.viewOffsetArray[1] = -modulo(mouseOffsetY + mouseDragY, gameHeight);
@@ -505,25 +537,23 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         data.viewScaleArray[1] = (scale * gameHeight) / canvasSize().height;
         data.device.queue.writeBuffer(data.viewScaleStorage, 0, data.viewScaleArray);
 
-        const encoder = data.device.createCommandEncoder();
+        if (doCompute) {
+            const computePass = encoder.beginComputePass();
+            computePass.setPipeline(data.simulationPipeline);
+            computePass.setBindGroup(0, data.bindGroups[data.step % 2]);
+            const workgroupCountX = Math.ceil(gameWidth / data.workgroupSize);
+            const workgroupCountY = Math.ceil(gameHeight / data.workgroupSize);
+            computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
+            computePass.end();
 
-        const computePass = encoder.beginComputePass();
-        computePass.setPipeline(data.simulationPipeline);
-        computePass.setBindGroup(0, data.bindGroups[data.step % 2]);
-        const workgroupCountX = Math.ceil(gameWidth / data.workgroupSize);
-        const workgroupCountY = Math.ceil(gameHeight / data.workgroupSize);
-        computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
-        computePass.end();
-
-        data.step++;
+            data.step++;
+        }
 
         const pass = encoder.beginRenderPass({
             colorAttachments: [
                 {
                     view: data.context.getCurrentTexture().createView(),
                     loadOp: 'clear',
-                    //clearValue: { r: 0.05, g: 0.05, b: 0.1, a: 1 },
-                    //clearValue: [0.05, 0.05, 0.1, 1],
                     clearValue: [0, 0, 0, 1],
                     storeOp: 'store',
                 },
@@ -535,7 +565,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         pass.setBindGroup(0, data.bindGroups[data.step % 2]);
         // 2D points, so 2 points per vertex
         // draw a grid full of instances
-        pass.draw(data.vertices.length / 2, gameWidth * gameHeight);
+        pass.draw(data.vertices.length >> 1, gameWidth * gameHeight);
 
         pass.end();
         data.device.queue.submit([encoder.finish()]);

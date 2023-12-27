@@ -8,8 +8,9 @@ export type Dimensions = {
 };
 
 function useGameOfLifeProvider() {
-    const [actualFrameRate, setActualFrameRate] = createSignal(1);
-    const [frameRate, setFrameRate] = createSignal(20);
+    const [actualComputeFrameRate, setActualComputeFrameRate] = createSignal(1);
+    const [actualRenderFrameRate, setActualRenderFrameRate] = createSignal(1);
+    const [computeFrameRate, setComputeFrameRate] = createSignal(20);
     const [paused, setPaused] = createSignal(false);
     const [zoomIsInverted, setZoomIsInverted] = createSignal(false);
     const [showAxes, setShowAxes] = createSignal(false);
@@ -18,10 +19,12 @@ function useGameOfLifeProvider() {
     const { listen: resetListen, emit: resetEmit } = createEventBus<void>(); // clear not used
 
     return {
-        actualFrameRate,
-        setActualFrameRate,
-        frameRate,
-        setFrameRate,
+        actualComputeFrameRate,
+        setActualComputeFrameRate,
+        actualRenderFrameRate,
+        setActualRenderFrameRate,
+        computeFrameRate,
+        setComputeFrameRate,
         paused,
         setPaused,
         zoomIsInverted,
