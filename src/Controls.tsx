@@ -91,9 +91,11 @@ export const Controls: Component = () => {
         actualRenderFrameRate,
         computeFrameRate,
         gradientName,
+        paused,
         resetEmit,
         setGradientName,
         setComputeFrameRate,
+        setPaused,
         setZoomIsInverted,
         zoomIsInverted,
         showAxes,
@@ -139,6 +141,13 @@ export const Controls: Component = () => {
                 value={showBackgroundAge()}
                 onChange={setShowBackgroundAge}
             />
+            <div>
+                <div class="flex flex-col mt-1">
+                    <button onClick={() => setPaused(!paused())}>
+                        {paused() ? 'Resume' : 'Pause'}
+                    </button>
+                </div>
+            </div>
             <div>
                 <div class="flex flex-col mt-1">
                     <button onClick={() => resetEmit()}>Restart</button>

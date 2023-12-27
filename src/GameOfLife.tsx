@@ -64,6 +64,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     const [, rest] = splitProps(props, ['foo']);
     const {
         computeFrameRate,
+        paused,
         resetListen,
         setActualComputeFrameRate,
         setActualRenderFrameRate,
@@ -117,11 +118,13 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         const startIndex = Math.max(computeFrameTimesMs.length - fr, 0);
         let timeMs = 0;
 
-        for (let i = startIndex; i < computeFrameTimesMs.length; i++) {
-            timeMs += computeFrameTimesMs[i];
-        }
+        if (!untrack(paused)) {
+            for (let i = startIndex; i < computeFrameTimesMs.length; i++) {
+                timeMs += computeFrameTimesMs[i];
+            }
 
-        setActualComputeFrameRate((1000 * (computeFrameTimesMs.length - startIndex)) / timeMs);
+            setActualComputeFrameRate((1000 * (computeFrameTimesMs.length - startIndex)) / timeMs);
+        }
 
         timeMs = 0;
 
@@ -438,7 +441,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         animationFrameRequest = requestAnimationFrame(() => {
             const currFrameTime = Date.now();
             animationFrameRequest = undefined;
-            const doCompute = frame === 0;
+            const doCompute = frame === 0 && !untrack(paused);
             const untrackedFramesPerCompute = untrack(framesPerCompute);
 
             updateGrid(doCompute);
@@ -473,6 +476,17 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         if (animationFrameRequest !== undefined) cancelAnimationFrame(animationFrameRequest);
         if (updateTimeout !== undefined) clearTimeout(updateTimeout);
         updateTimeout = setTimeout(scheduleNextFrame, 1);
+    });
+
+    createEffect(() => {
+        const isPaused = paused();
+
+        if (isPaused) {
+            setActualComputeFrameRate(0);
+            frame = 0;
+        } else {
+            prevComputeFrameTime = Date.now();
+        }
     });
 
     createEffect(() => {
