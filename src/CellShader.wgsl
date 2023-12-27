@@ -51,13 +51,14 @@ fn cellIndex(cell: vec2f) -> u32 {
 
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
-    let i = cellIndex(input.cell);
-    let state = f32(cellState[i] > 0);
-    let age = max(min(cellState[i], 100), -100);
+    let state = cellState[cellIndex(input.cell)];
+    let isAlive = f32(state > 0);
+    let age = max(min(state, 100), -100);
+    let age3 = 3 * abs(age);
     let axisColor = vec3f(0.0, 1.0, 0.0);
-    let isAxis = (1 - state) * simParams.showAxes * f32(input.cell.x == 0 || input.cell.y == 0);
-    let f = state + (1 - state) * 0.2 * simParams.showBackgroundAge;
-    let cellColor = f * vec3f(cellGradient[3 * abs(age)], cellGradient[3 * abs(age) + 1], cellGradient[3 * abs(age) + 2]);
+    let isAxis = (1 - isAlive) * simParams.showAxes * f32(input.cell.x == 0 || input.cell.y == 0);
+    let f = isAlive + (1 - isAlive) * 0.2 * simParams.showBackgroundAge;
+    let cellColor = f * vec3f(cellGradient[age3], cellGradient[age3 + 1], cellGradient[age3 + 2]);
     let rgb = (1 - isAxis) * cellColor + isAxis * axisColor;
     return vec4f(rgb,  1);
 }

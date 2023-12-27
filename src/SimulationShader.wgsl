@@ -6,7 +6,7 @@ fn cellIndex(cell: vec2u) -> u32 {
     return cell.y * u32(gridSize.x) + cell.x;
 }
 
-fn cellAlive(x: u32, y: u32) -> u32 {
+fn isCellAlive(x: u32, y: u32) -> u32 {
     return u32(cellStateIn[cellIndex(vec2(x, y))] > 0);
 }
 
@@ -29,16 +29,16 @@ fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
     let bottom = modulo(i32(cell.y) - 1, u32(gridSize.y));
 
     let numNeighbors =
-        cellAlive(left, top) +
-        cellAlive(cell.x, top) +
-        cellAlive(right, top) +
-        cellAlive(left, cell.y) +
-        //cellAlive(cell.x, cell.y) +
-        cellAlive(right, cell.y) +
-        cellAlive(left, bottom) +
-        cellAlive(cell.x, bottom) +
-        cellAlive(right, bottom);
-    let value = i32((rules[numNeighbors] >> cellAlive(cell.x, cell.y)) & 0x01);
+        isCellAlive(left, top) +
+        isCellAlive(cell.x, top) +
+        isCellAlive(right, top) +
+        isCellAlive(left, cell.y) +
+        //isCellAlive(cell.x, cell.y) +
+        isCellAlive(right, cell.y) +
+        isCellAlive(left, bottom) +
+        isCellAlive(cell.x, bottom) +
+        isCellAlive(right, bottom);
+    let value = i32((rules[numNeighbors] >> isCellAlive(cell.x, cell.y)) & 0x01);
     let i = cellIndex(cell.xy);
     let prev = cellStateIn[i];
     cellStateOut[i] = i32(prev >= 0) * prev * value + value + i32(prev <= 0) * (1 - value) * (prev - 1);
