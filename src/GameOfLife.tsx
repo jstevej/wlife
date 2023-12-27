@@ -47,11 +47,13 @@ type GpuData = {
     workgroupSize: number;
 };
 
-// Javascript's modulo is weird for negative numbers. This fixes it.
-// https://web.archive.org/web/20090717035140if_/javascript.about.com/od/problemsolving/a/modulobug.htm
+// Javascript's modulo implementation uses truncated division, which usually is not what we want for
+// negative numbers. This implementation is for floored division, which is what we want.
+//
+// https://en.wikipedia.org/wiki/Modulo
 
 function modulo(x: number, n: number): number {
-    return ((x % n) + n) % n;
+    return x - n * Math.floor(x / n);
 }
 
 const maxAge = 100;
