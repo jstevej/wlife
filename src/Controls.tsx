@@ -17,7 +17,9 @@ const Checkbox: Component<CheckboxProps> = props => {
     return (
         <div>
             <input type="checkbox" checked={props.value} onChange={onChange} />
-            <label class="ml-2">{props.label}</label>
+            <label class="ml-2" onClick={() => props.onChange(!props.value)}>
+                {props.label}
+            </label>
         </div>
     );
 };
@@ -36,7 +38,7 @@ const Select: Component<SelectProps> = props => {
     };
 
     return (
-        <div class="flex flex-row space-x-2">
+        <div class="flex flex-row space-x-2 py-1">
             <div>{`${props.title}:`}</div>
             <select onChange={onChange}>
                 <For each={props.options}>
