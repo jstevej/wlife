@@ -54,10 +54,11 @@ fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
     let state = cellState[cellIndex(input.cell)];
     let isAlive = f32(state > 0);
     let age = max(min(state, 100), -100);
+    let isNotOldest = f32(age > -100);
     let age3 = 3 * abs(age);
     let axisColor = vec3f(0.0, 1.0, 0.0);
     let isAxis = (1 - isAlive) * simParams.showAxes * f32(input.cell.x == 0 || input.cell.y == 0);
-    let f = isAlive + (1 - isAlive) * 0.2 * simParams.showBackgroundAge;
+    let f = isAlive + (1 - isAlive) * 0.2 * simParams.showBackgroundAge * isNotOldest;
     let cellColor = f * vec3f(cellGradient[age3], cellGradient[age3 + 1], cellGradient[age3 + 2]);
     let rgb = (1 - isAxis) * cellColor + isAxis * axisColor;
     return vec4f(rgb,  1);
