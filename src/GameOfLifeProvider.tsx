@@ -14,8 +14,8 @@ function useGameOfLifeProvider() {
     const [paused, setPaused] = createSignal(false);
     const [zoomIsInverted, setZoomIsInverted] = createSignal(false);
     const [showAxes, setShowAxes] = createSignal(false);
-    const [showBackgroundAge, setShowBackgroundAge] = createSignal(false);
-    const [gradientName, setGradientName] = createSignal<GradientName>('jet');
+    const [showBackgroundAge, setShowBackgroundAge] = createSignal(true);
+    const [gradientName, setGradientName] = createSignal<GradientName>('agSunset');
     const { listen: resetListen, emit: resetEmit } = createEventBus<void>(); // clear not used
 
     return {
