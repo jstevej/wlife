@@ -7,53 +7,53 @@ export type Dimensions = {
     width: number;
 };
 
-function useGameOfLifeProvider() {
+function useGameOfLifeControlsProvider() {
     const [actualComputeFrameRate, setActualComputeFrameRate] = createSignal(1);
     const [actualRenderFrameRate, setActualRenderFrameRate] = createSignal(1);
     const [computeFrameRate, setComputeFrameRate] = createSignal(20);
-    const [paused, setPaused] = createSignal(false);
-    const [zoomIsInverted, setZoomIsInverted] = createSignal(false);
-    const [showAxes, setShowAxes] = createSignal(false);
-    const [showBackgroundAge, setShowBackgroundAge] = createSignal(true);
     const [gradientName, setGradientName] = createSignal<GradientName>('agSunset');
     const { listen: resetListen, emit: resetEmit } = createEventBus<void>(); // clear not used
+    const [paused, setPaused] = createSignal(false);
+    const [showAxes, setShowAxes] = createSignal(false);
+    const [showBackgroundAge, setShowBackgroundAge] = createSignal(true);
+    const [zoomIsInverted, setZoomIsInverted] = createSignal(false);
 
     return {
         actualComputeFrameRate,
-        setActualComputeFrameRate,
         actualRenderFrameRate,
-        setActualRenderFrameRate,
         computeFrameRate,
-        setComputeFrameRate,
+        gradientName,
         paused,
+        resetEmit,
+        resetListen,
+        setActualComputeFrameRate,
+        setActualRenderFrameRate,
+        setComputeFrameRate,
+        setGradientName,
         setPaused,
-        zoomIsInverted,
+        setShowAxes,
+        setShowBackgroundAge,
         setZoomIsInverted,
         showAxes,
-        setShowAxes,
         showBackgroundAge,
-        setShowBackgroundAge,
-        gradientName,
-        setGradientName,
-        resetListen,
-        resetEmit,
+        zoomIsInverted,
     };
 }
 
-export type GameOfLifeContextType = ReturnType<typeof useGameOfLifeProvider>;
+export type GameOfLifeContextType = ReturnType<typeof useGameOfLifeControlsProvider>;
 
 const GameOfLifeContext = createContext<GameOfLifeContextType>();
 
-export const GameOfLifeProvider: ParentComponent = props => {
-    const value = useGameOfLifeProvider();
+export const GameOfLifeControlsProvider: ParentComponent = props => {
+    const value = useGameOfLifeControlsProvider();
     return <GameOfLifeContext.Provider value={value}>{props.children}</GameOfLifeContext.Provider>;
 };
 
-export function useGameOfLife() {
+export function useGameOfLifeControls() {
     const context = useContext(GameOfLifeContext);
 
     if (context === undefined) {
-        throw new Error(`useGameOfLife must be used within a GameOfLifeProvider component`);
+        throw new Error(`useGameOfLife must be used within a GameOfLifeControlsProvider component`);
     }
 
     return context;

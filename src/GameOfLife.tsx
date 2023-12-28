@@ -11,7 +11,7 @@ import {
     untrack,
 } from 'solid-js';
 import cellShaderCode from './CellShader.wgsl?raw';
-import { useGameOfLife } from './GameOfLifeProvider';
+import { useGameOfLifeControls } from './GameOfLifeControlsProvider';
 import { getGradientValues } from './Gradients';
 import simulationShaderCode from './SimulationShader.wgsl?raw';
 
@@ -72,7 +72,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         showBackgroundAge,
         gradientName,
         zoomIsInverted,
-    } = useGameOfLife();
+    } = useGameOfLifeControls();
     const [ref, setRef] = createSignal<HTMLDivElement>();
     let mouseDragging = false;
     let mouseClientX = 0;
@@ -577,8 +577,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         pass.setPipeline(data.cellPipeline);
         pass.setVertexBuffer(0, data.vertexBuffer);
         pass.setBindGroup(0, data.bindGroups[data.step % 2]);
-        // 2D points, so 2 points per vertex
-        // draw a grid full of instances
+        // 2D points, so 2 points per vertex; draw a grid full of instances
         pass.draw(data.vertices.length >> 1, gameWidth * gameHeight);
 
         pass.end();

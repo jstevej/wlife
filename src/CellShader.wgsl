@@ -20,9 +20,12 @@ struct SimParams {
 @group(0) @binding(4) var<storage> cellGradient: array<f32>;
 @group(0) @binding(5) var<storage> cellState: array<i32>;
 
+// WGSL's modulo implementation uses truncated division, which usually is not what we want for
+// negative numbers. This implementation is for floored division, which is what we want.
+//
+// https://en.wikipedia.org/wiki/Modulo
+
 fn modulo(x: vec2f, n: vec2f) -> vec2f {
-    //return ((x % n) + n) % n;
-    // assume n is positive, then use floored division
     return x - n * floor(x / n);
 }
 
@@ -42,12 +45,6 @@ fn vertexMain(input: VertexInput) -> VertexOutput {
 fn cellIndex(cell: vec2f) -> u32 {
     return u32(cell.y * gridSize.x + cell.x);
 }
-
-//fn hsl2rgb(hsl: vec3f) -> vec3f {
-//    let c = vec3f(fract(hsl.x), clamp(hsl.yz, vec2f(0), vec2f(1)));
-//    let rgb = clamp(abs((c.x * 6.0 + vec3f(0.0, 4.0, 2.0)) % 6.0 - 3.0) - 1.0, vec3f(0), vec3f(1));
-//    return c.z + c.y * (rgb - 0.5) * (1.0 - abs(2.0 * c.z - 1.0));
-//}
 
 @fragment
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {

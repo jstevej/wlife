@@ -1,5 +1,5 @@
 import { Component, createEffect, createSignal, For, JSX } from 'solid-js';
-import { useGameOfLife } from './GameOfLifeProvider';
+import { useGameOfLifeControls } from './GameOfLifeControlsProvider';
 import { getGradientName, gradientNames, isGradientName } from './Gradients';
 
 type CheckboxProps = {
@@ -104,7 +104,7 @@ export const Controls: Component = () => {
         setShowAxes,
         showBackgroundAge,
         setShowBackgroundAge,
-    } = useGameOfLife();
+    } = useGameOfLifeControls();
     const [sliderFrameRate, setSliderFrameRate] = createSignal(20);
 
     createEffect(() => {

@@ -15,8 +15,12 @@ fn isCellAlive(x: u32, y: u32) -> u32 {
 const rules: array<u32, 9> = array(0, 0, 2, 3, 0, 0, 0, 0, 0); // conway's rules
 //const rules: array<u32, 9> = array(0, 0, 2, 2, 3, 0, 0, 0, 0); // jenn's rules
 
+// WGSL's modulo implementation uses truncated division, which usually is not what we want for
+// negative numbers. This implementation is for floored division, which is what we want.
+//
+// https://en.wikipedia.org/wiki/Modulo
+
 fn modulo(x: i32, n: u32) -> u32 {
-    // assume n is positive, then use floored division
     return u32(i32(x) - i32(n) * i32(floor(f32(x) / f32(n))));
 }
 
