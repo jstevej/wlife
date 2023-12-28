@@ -12,7 +12,7 @@ fn isCellAlive(x: u32, y: u32) -> u32 {
 
 // rules[numNeighbors] = (ifAlive << 1) | (ifDead);
 
-const rules: array<u32, 9> = array(0, 0, 2, 3, 0, 0, 0, 0, 0);
+const rules: array<u32, 9> = array(0, 0, 2, 3, 0, 0, 0, 0, 0); // conway's rules
 //const rules: array<u32, 9> = array(0, 0, 2, 2, 3, 0, 0, 0, 0); // jenn's rules
 
 fn modulo(x: i32, n: u32) -> u32 {
