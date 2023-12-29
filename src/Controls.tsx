@@ -1,4 +1,5 @@
 import { Component, createEffect, createSignal, For, JSX } from 'solid-js';
+import PanZoomIcon from './assets/pan-zoom.svg';
 import { useGameOfLifeControls } from './GameOfLifeControlsProvider';
 import { getGradientName, getGradientStops, gradientNames, isGradientName } from './Gradients';
 
@@ -70,7 +71,7 @@ const Slider: Component<SliderProps> = props => {
     };
 
     return (
-        <div class="flex flex-col">
+        <div class="flex flex-col mb-1">
             <div class="flex flex-row">
                 <div class="flex-1 text-gray-400">{`${props.title}: `}</div>
                 <div>{props.displayValue ?? props.value.toString()}</div>
@@ -132,7 +133,6 @@ export const Controls: Component = () => {
                 onInput={onFrameRateSliderChanged}
                 value={sliderFrameRate()}
             />
-            <Checkbox label="Invert Zoom" value={zoomIsInverted()} onChange={setZoomIsInverted} />
             <div>
                 <Select
                     title="Gradient"
@@ -143,12 +143,12 @@ export const Controls: Component = () => {
                     }}
                 />
                 <div
-                    class="h-4"
+                    class="mt-1 h-4"
                     style={{
-                        background: `linear-gradient(to right, ${gradientStops()})`,
+                        background: `linear-gradient(${gradientStops()})`,
                     }}
                 ></div>
-                <div class="flex flex-row">
+                <div class="flex flex-row mb-1">
                     <div>0</div>
                     <div class="flex-1 flex flex-row justify-center">
                         <div>← age →</div>
@@ -162,6 +162,7 @@ export const Controls: Component = () => {
                 value={showBackgroundAge()}
                 onChange={setShowBackgroundAge}
             />
+            <Checkbox label="Invert Zoom" value={zoomIsInverted()} onChange={setZoomIsInverted} />
             <div>
                 <div class="flex flex-col mt-1">
                     <button onClick={() => setPaused(!paused())}>
@@ -174,9 +175,30 @@ export const Controls: Component = () => {
                     <button onClick={() => resetEmit()}>Restart</button>
                 </div>
             </div>
+            <div class="mt-1">
+                <div class="flex flex-row">
+                    <div class="flex-1">Render:</div>
+                    <div>{`${actualRenderFrameRate().toFixed(1)} fps`}</div>
+                </div>
+                <div class="flex flex-row">
+                    <div class="flex-1">Compute:</div>
+                    <div>{`${actualComputeFrameRate().toFixed(1)} fps`}</div>
+                </div>
+            </div>
+            <div class="flex-1"></div>
+            <div class="flex flex-row justify-center">
+                <div class="my-2 text-blue-500">
+                    <PanZoomIcon />
+                </div>
+            </div>
             <div>
-                <div>{`Render: ${actualRenderFrameRate().toFixed(1)} fps`}</div>
-                <div>{`Compute: ${actualComputeFrameRate().toFixed(1)} fps`}</div>
+                <a
+                    href="https://en.wikipedia.org/wiki/Conway%27s_Game_of_Life"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                >
+                    Conway's Game of Life
+                </a>
             </div>
         </div>
     );
