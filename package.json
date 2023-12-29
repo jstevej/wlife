@@ -19,6 +19,7 @@
     "eslint-config-prettier": "^9.0.0",
     "eslint-plugin-ordered-imports": "^0.6.0",
     "eslint-plugin-prettier": "^5.0.1",
+    "firebase-tools": "^13.0.2",
     "postcss": "^8.4.31",
     "prettier": "^3.0.3",
     "prettier-eslint": "^16.1.2",
