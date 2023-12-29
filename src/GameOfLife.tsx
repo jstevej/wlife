@@ -82,8 +82,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     let mouseStartY = 0;
     let mouseDragX = 0;
     let mouseDragY = 0;
-    let mouseOffsetX = 0;
-    let mouseOffsetY = 0;
+    let mouseOffsetX = gameWidth >> 1;
+    let mouseOffsetY = gameHeight >> 1;
     let scale = 1;
     const [canvasSize, setCanvasSize] = createSignal<Dimensions>({ height: 100, width: 100 });
     const canvasSizeThrottle = leadingAndTrailing(
