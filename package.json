@@ -4,7 +4,7 @@
   "description": "",
   "scripts": {
     "build": "vite build",
-    "deploy": "firebase deploy --only hosting",
+    "deploy": "npm run build && firebase deploy --only hosting",
     "dev": "vite --port 3333",
     "lint": "npx eslint ./src && npx tsc --noEmit",
     "serve": "vite preview --port 3333",
