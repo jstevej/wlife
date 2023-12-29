@@ -53,7 +53,9 @@ export function useGameOfLifeControls() {
     const context = useContext(GameOfLifeContext);
 
     if (context === undefined) {
-        throw new Error(`useGameOfLife must be used within a GameOfLifeControlsProvider component`);
+        throw new Error(
+            `useGameOfLifeControls must be used within a GameOfLifeControlsProvider component`
+        );
     }
 
     return context;
