@@ -1,6 +1,6 @@
 import { Component, createEffect, createSignal, For, JSX } from 'solid-js';
 import { useGameOfLifeControls } from './GameOfLifeControlsProvider';
-import { getGradientName, gradientNames, isGradientName } from './Gradients';
+import { getGradientName, getGradientStops, gradientNames, isGradientName } from './Gradients';
 
 type CheckboxProps = {
     label: string;
@@ -107,6 +107,10 @@ export const Controls: Component = () => {
     } = useGameOfLifeControls();
     const [sliderFrameRate, setSliderFrameRate] = createSignal(20);
 
+    const gradientStops = () => {
+        return getGradientStops(gradientName()).join(', ');
+    };
+
     createEffect(() => {
         const fr = sliderFrameRate();
         setComputeFrameRate(fr > 0 ? fr : 1);
@@ -129,14 +133,29 @@ export const Controls: Component = () => {
                 value={sliderFrameRate()}
             />
             <Checkbox label="Invert Zoom" value={zoomIsInverted()} onChange={setZoomIsInverted} />
-            <Select
-                title="Gradient"
-                options={gradientNames.map(name => [name, getGradientName(name)])}
-                currentValue={gradientName()}
-                onChange={value => {
-                    if (isGradientName(value)) setGradientName(value);
-                }}
-            />
+            <div>
+                <Select
+                    title="Gradient"
+                    options={gradientNames.map(name => [name, getGradientName(name)])}
+                    currentValue={gradientName()}
+                    onChange={value => {
+                        if (isGradientName(value)) setGradientName(value);
+                    }}
+                />
+                <div
+                    class="h-4"
+                    style={{
+                        background: `linear-gradient(to right, ${gradientStops()})`,
+                    }}
+                ></div>
+                <div class="flex flex-row">
+                    <div>0</div>
+                    <div class="flex-1 flex flex-row justify-center">
+                        <div>← age →</div>
+                    </div>
+                    <div>100</div>
+                </div>
+            </div>
             <Checkbox label="Show Axes" value={showAxes()} onChange={setShowAxes} />
             <Checkbox
                 label="Background Age"

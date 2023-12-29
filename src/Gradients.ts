@@ -1,3 +1,4 @@
+import { assertUnhandled } from './Sutl';
 export const gradientNames = [
     'agSunset',
     'agSunsetRev',
@@ -226,6 +227,18 @@ const gradientValues: Partial<Record<GradientName, Float32Array>> = {};
 
 export function getGradientName(gradientName: GradientName): string {
     return gradientDefs[gradientName].name;
+}
+
+export function getGradientStops(gradientName: GradientName): Array<string> {
+    const gradientDef = gradientDefs[gradientName];
+
+    if (gradientDef.type === 'rgb') {
+        return gradientDef.values.map(v => `rgb(${v.join(' ')})`);
+    } else if (gradientDef.type === 'hsl') {
+        return gradientDef.values.map(v => `hsl(${v[0] * 360}deg ${v[1] * 100}% ${v[2] * 100}%)`);
+    } else {
+        assertUnhandled(gradientDef);
+    }
 }
 
 export function getGradientValues(gradientName: GradientName, maxAge: number): Float32Array {
