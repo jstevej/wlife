@@ -92,6 +92,7 @@ export const Controls: Component = () => {
     const {
         actualComputeFrameRate,
         actualRenderFrameRate,
+        age,
         computeFrameRate,
         gradientName,
         paused,
@@ -173,6 +174,12 @@ export const Controls: Component = () => {
             <div>
                 <div class="flex flex-col mt-1">
                     <button onClick={() => resetEmit()}>Restart</button>
+                </div>
+            </div>
+            <div class="mt-1">
+                <div class="flex flex-row">
+                    <div class="flex-1">Age:</div>
+                    <div>{`${age().toLocaleString()}`}</div>
                 </div>
             </div>
             <div class="mt-1">

@@ -10,6 +10,7 @@ export type Dimensions = {
 function useGameOfLifeControlsProvider() {
     const [actualComputeFrameRate, setActualComputeFrameRate] = createSignal(1);
     const [actualRenderFrameRate, setActualRenderFrameRate] = createSignal(1);
+    const [age, setAge] = createSignal(0);
     const [computeFrameRate, setComputeFrameRate] = createSignal(20);
     const [gradientName, setGradientName] = createSignal<GradientName>('agSunset');
     const { listen: resetListen, emit: resetEmit } = createEventBus<void>(); // clear not used
@@ -21,6 +22,7 @@ function useGameOfLifeControlsProvider() {
     return {
         actualComputeFrameRate,
         actualRenderFrameRate,
+        age,
         computeFrameRate,
         gradientName,
         paused,
@@ -28,6 +30,7 @@ function useGameOfLifeControlsProvider() {
         resetListen,
         setActualComputeFrameRate,
         setActualRenderFrameRate,
+        setAge,
         setComputeFrameRate,
         setGradientName,
         setPaused,

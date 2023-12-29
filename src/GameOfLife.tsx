@@ -68,6 +68,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         resetListen,
         setActualComputeFrameRate,
         setActualRenderFrameRate,
+        setAge,
         showAxes,
         showBackgroundAge,
         gradientName,
@@ -134,6 +135,14 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         setActualRenderFrameRate((1000 * renderFrameTimesMs.length) / timeMs);
     }, 1000);
+
+    setInterval(() => {
+        const untrackedGpuData = untrack(gpuData);
+
+        if (untrackedGpuData !== undefined && typeof untrackedGpuData !== 'string') {
+            setAge(untrackedGpuData.step);
+        }
+    }, 100);
 
     const [gpuData] = createResource<GpuData | string>(async (): Promise<GpuData | string> => {
         // Setup canvas.
