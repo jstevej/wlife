@@ -17,6 +17,7 @@ function useGameOfLifeControlsProvider() {
     const [paused, setPaused] = createSignal(false);
     const [showAxes, setShowAxes] = createSignal(false);
     const [showBackgroundAge, setShowBackgroundAge] = createSignal(true);
+    const [showGrid, setShowGrid] = createSignal(false);
     const [zoomIsInverted, setZoomIsInverted] = createSignal(false);
 
     return {
@@ -36,9 +37,11 @@ function useGameOfLifeControlsProvider() {
         setPaused,
         setShowAxes,
         setShowBackgroundAge,
+        setShowGrid,
         setZoomIsInverted,
         showAxes,
         showBackgroundAge,
+        showGrid,
         zoomIsInverted,
     };
 }

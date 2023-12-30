@@ -100,12 +100,14 @@ export const Controls: Component = () => {
         setGradientName,
         setComputeFrameRate,
         setPaused,
-        setZoomIsInverted,
-        zoomIsInverted,
-        showAxes,
         setShowAxes,
-        showBackgroundAge,
         setShowBackgroundAge,
+        setShowGrid,
+        setZoomIsInverted,
+        showAxes,
+        showBackgroundAge,
+        showGrid,
+        zoomIsInverted,
     } = useGameOfLifeControls();
     const [sliderFrameRate, setSliderFrameRate] = createSignal(20);
 
@@ -163,6 +165,7 @@ export const Controls: Component = () => {
                 value={showBackgroundAge()}
                 onChange={setShowBackgroundAge}
             />
+            <Checkbox label="Show Grid" value={showGrid()} onChange={setShowGrid} />
             <Checkbox label="Invert Zoom" value={zoomIsInverted()} onChange={setZoomIsInverted} />
             <div>
                 <div class="flex flex-col mt-1">

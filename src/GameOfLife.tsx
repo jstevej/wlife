@@ -71,6 +71,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         setAge,
         showAxes,
         showBackgroundAge,
+        showGrid,
         gradientName,
         zoomIsInverted,
     } = useGameOfLifeControls();
@@ -84,7 +85,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     let mouseDragY = 0;
     let mouseOffsetX = gameWidth >> 1;
     let mouseOffsetY = gameHeight >> 1;
-    let scale = 1;
+    const [scale, setScale] = createSignal(1);
     const [canvasSize, setCanvasSize] = createSignal<Dimensions>({ height: 100, width: 100 });
     const canvasSizeThrottle = leadingAndTrailing(
         throttle,
@@ -166,10 +167,6 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         context.configure({ device, format });
 
         const vertices = new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]);
-        for (let i = 0; i < vertices.length; i += 2) {
-            vertices[i] *= 1;
-            vertices[i + 1] *= 1;
-        }
         const vertexBuffer = device.createBuffer({
             label: 'cell vertices',
             size: vertices.byteLength,
@@ -520,6 +517,23 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
     createEffect(() => {
         const data = gpuData();
+        const fact = showGrid() && scale() > 3 ? 1 - 2 / scale() : 1;
+
+        if (data === undefined || typeof data === 'string') return;
+
+        for (let i = 0; i < data.vertices.length; i++) {
+            // Shrink left and bottom borders.
+
+            if (Math.sign(data.vertices[i]) < 0) {
+                data.vertices[i] = Math.sign(data.vertices[i]) * fact;
+            }
+        }
+
+        data.device.queue.writeBuffer(data.vertexBuffer, 0, data.vertices);
+    });
+
+    createEffect(() => {
+        const data = gpuData();
         const gradientNameValue = gradientName();
 
         if (data === undefined || typeof data === 'string') return;
@@ -550,14 +564,15 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         if (data === undefined || typeof data === 'string') return;
 
+        const untrackedScale = untrack(scale);
         const encoder = data.device.createCommandEncoder();
 
         data.viewOffsetArray[0] = modulo(mouseOffsetX + mouseDragX, gameWidth);
         data.viewOffsetArray[1] = -modulo(mouseOffsetY + mouseDragY, gameHeight);
         data.device.queue.writeBuffer(data.viewOffsetStorage, 0, data.viewOffsetArray);
 
-        data.viewScaleArray[0] = (scale * gameWidth) / canvasSize().width;
-        data.viewScaleArray[1] = (scale * gameHeight) / canvasSize().height;
+        data.viewScaleArray[0] = (untrackedScale * gameWidth) / canvasSize().width;
+        data.viewScaleArray[1] = (untrackedScale * gameHeight) / canvasSize().height;
         data.device.queue.writeBuffer(data.viewScaleStorage, 0, data.viewScaleArray);
 
         if (doCompute) {
@@ -577,7 +592,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                 {
                     view: data.context.getCurrentTexture().createView(),
                     loadOp: 'clear',
-                    clearValue: [0, 0, 0, 1],
+                    clearValue: [0.2, 0.2, 0.2, 1],
                     storeOp: 'store',
                 },
             ],
@@ -600,9 +615,11 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     };
 
     const onMouseMove = (event: MouseEvent) => {
+        const untrackedScale = untrack(scale);
+
         if (mouseDragging) {
-            mouseDragX = (event.clientX - mouseStartX) / scale;
-            mouseDragY = (event.clientY - mouseStartY) / scale;
+            mouseDragX = (event.clientX - mouseStartX) / untrackedScale;
+            mouseDragY = (event.clientY - mouseStartY) / untrackedScale;
         }
         mouseClientX = event.clientX;
         mouseClientY = event.clientY;
@@ -617,17 +634,18 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     };
 
     const onWheel = (event: WheelEvent) => {
+        const untrackedScale = untrack(scale);
         const invert = untrack(zoomIsInverted) ? 1 : -1;
         const direction = Math.sign(event.deltaY);
-        const newScale = Math.min(Math.max(scale + invert * direction, 1), 15);
-        if (newScale === scale) return;
+        const newScale = Math.min(Math.max(untrackedScale + invert * direction, 1), 15);
+        if (newScale === untrackedScale) return;
 
         const { width, height } = untrack(canvasSize);
-        const dragX = ((1 - newScale / scale) * (mouseClientX - 0.5 * width)) / newScale;
-        const dragY = ((1 - newScale / scale) * (mouseClientY - 0.5 * height)) / newScale;
+        const dragX = ((1 - newScale / untrackedScale) * (mouseClientX - 0.5 * width)) / newScale;
+        const dragY = ((1 - newScale / untrackedScale) * (mouseClientY - 0.5 * height)) / newScale;
         mouseOffsetX = modulo(mouseOffsetX + dragX, gameWidth);
         mouseOffsetY = modulo(mouseOffsetY + dragY, gameHeight);
-        scale = newScale;
+        setScale(newScale);
         event.preventDefault();
     };
 
