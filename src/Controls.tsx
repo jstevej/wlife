@@ -1,4 +1,4 @@
-import { Component, createMemo, For, JSX, untrack } from 'solid-js';
+import { Component, createEffect, createMemo, For, JSX, untrack } from 'solid-js';
 import PanZoomIcon from './assets/pan-zoom.svg';
 import { gridScaleLimit, useGameOfLifeControls } from './GameOfLifeControlsProvider';
 import { getGradientName, getGradientStops, gradientNames, isGradientName } from './Gradients';
@@ -141,6 +141,39 @@ export const Controls: Component = () => {
         }
 
         return newValues;
+    });
+
+    // Initialize framesPerCompute to result in 15 frames per second (based on the detected display
+    // frame rate).
+
+    createEffect(() => {
+        const detectedFrameRateValue = detectedFrameRate();
+        const values = framesPerComputeValues();
+
+        const desiredComputeFrameRate = 15;
+        let bestFrameRate = 15;
+        let bestFramesPerCompute = 4;
+        let bestError = Number.MAX_VALUE;
+
+        for (const currFramesPerCompute of values) {
+            const computeFrameRate = detectedFrameRateValue / currFramesPerCompute;
+            const error = Math.abs(computeFrameRate - desiredComputeFrameRate);
+
+            if (error < bestError) {
+                bestFrameRate = computeFrameRate;
+                bestFramesPerCompute = currFramesPerCompute;
+                bestError = error;
+            }
+
+            if (error === 0 || error > bestError) {
+                break;
+            }
+        }
+
+        console.log(
+            `setting initial framesPerCompute = ${bestFramesPerCompute} (${bestFrameRate} fps)`
+        );
+        setFramesPerCompute(bestFramesPerCompute);
     });
 
     const onSpeedSliderChanged = (value: number) => {
