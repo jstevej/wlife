@@ -60,18 +60,20 @@ function modulo(x: number, n: number): number {
 const maxAge = 100;
 
 export const GameOfLife: Component<GameOfLifeProps> = props => {
-    const gameHeight = window.screen.height;
-    const gameWidth = window.screen.width;
     const [, rest] = splitProps(props, ['foo']);
     const {
+        canvasSize,
         detectedFrameRate,
         framesPerCompute,
+        gridSize,
         paused,
         resetListen,
         scale,
         setActualComputeFrameRate,
         setActualRenderFrameRate,
         setAge,
+        setCanvasSize,
+        setGridSize,
         setScale,
         showAxes,
         showBackgroundAge,
@@ -87,12 +89,16 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     let mouseStartY = 0;
     let mouseDragX = 0;
     let mouseDragY = 0;
-    let mouseOffsetX = gameWidth >> 1;
-    let mouseOffsetY = gameHeight >> 1;
-    const [canvasSize, setCanvasSize] = createSignal<Dimensions>({ height: 100, width: 100 });
+    let mouseOffsetX = window.screen.width >> 1;
+    let mouseOffsetY = window.screen.height >> 1;
     const canvasSizeThrottle = leadingAndTrailing(
         throttle,
-        (dim: Dimensions) => setCanvasSize(dim),
+        (dim: Dimensions) => {
+            console.log(
+                `canvas size = ${dim.width} x ${dim.height}, dpr = ${window.devicePixelRatio}`
+            );
+            setCanvasSize(dim);
+        },
         500
     );
     let animationFrameRequest: ReturnType<typeof requestAnimationFrame> | undefined;
@@ -102,6 +108,12 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     let prevComputeFrameTime = performance.now();
     const frameRateUpdateMs = 1000;
     let frame = 0;
+
+    setGridSize({ height: window.screen.height, width: window.screen.width });
+
+    console.log(
+        `screen size = ${window.screen.width} x ${window.screen.height}, dpr = ${window.devicePixelRatio}`
+    );
 
     // Calculate computes per frame. This can be greater than 1 because we support compute frame
     // rates faster than the display frame rate.
@@ -262,7 +274,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             ],
         };
 
-        const gridSizeArray = new Float32Array([gameWidth, gameHeight]);
+        const untrackedGridSize = untrack(gridSize);
+        const gridSizeArray = new Float32Array([untrackedGridSize.width, untrackedGridSize.height]);
         const gridSizeBuffer = device.createBuffer({
             label: 'gridSize uniform',
             size: gridSizeArray.byteLength,
@@ -271,8 +284,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         device.queue.writeBuffer(gridSizeBuffer, 0, gridSizeArray);
 
         const viewScaleArray = new Float32Array([
-            (4 * gameWidth) / canvasSize().width,
-            (4 * gameHeight) / canvasSize().height,
+            (4 * untrackedGridSize.width) / canvasSize().width,
+            (4 * untrackedGridSize.height) / canvasSize().height,
         ]);
         const viewScaleStorage = device.createBuffer({
             label: 'viewScale storage',
@@ -308,7 +321,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             getGradientValues(untrack(gradientName), maxAge)
         );
 
-        const cellStateArray = new Int32Array(gameWidth * gameHeight);
+        const cellStateArray = new Int32Array(untrackedGridSize.width * untrackedGridSize.height);
         const cellStateStorage = [
             device.createBuffer({
                 label: 'cell state ping',
@@ -644,15 +657,16 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         if (data === undefined || typeof data === 'string') return;
 
+        const untrackedGridSize = untrack(gridSize);
         const untrackedScale = untrack(scale);
         const encoder = data.device.createCommandEncoder();
 
-        data.viewOffsetArray[0] = modulo(mouseOffsetX + mouseDragX, gameWidth);
-        data.viewOffsetArray[1] = -modulo(mouseOffsetY + mouseDragY, gameHeight);
+        data.viewOffsetArray[0] = modulo(mouseOffsetX + mouseDragX, untrackedGridSize.width);
+        data.viewOffsetArray[1] = -modulo(mouseOffsetY + mouseDragY, untrackedGridSize.height);
         data.device.queue.writeBuffer(data.viewOffsetStorage, 0, data.viewOffsetArray);
 
-        data.viewScaleArray[0] = (untrackedScale * gameWidth) / canvasSize().width;
-        data.viewScaleArray[1] = (untrackedScale * gameHeight) / canvasSize().height;
+        data.viewScaleArray[0] = (untrackedScale * untrackedGridSize.width) / canvasSize().width;
+        data.viewScaleArray[1] = (untrackedScale * untrackedGridSize.height) / canvasSize().height;
         data.device.queue.writeBuffer(data.viewScaleStorage, 0, data.viewScaleArray);
 
         if (doCompute) {
@@ -662,8 +676,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                 const computePass = encoder.beginComputePass();
                 computePass.setPipeline(data.simulationPipeline);
                 computePass.setBindGroup(0, data.bindGroups[data.step % 2]);
-                const workgroupCountX = Math.ceil(gameWidth / data.workgroupSize);
-                const workgroupCountY = Math.ceil(gameHeight / data.workgroupSize);
+                const workgroupCountX = Math.ceil(untrackedGridSize.width / data.workgroupSize);
+                const workgroupCountY = Math.ceil(untrackedGridSize.height / data.workgroupSize);
                 computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
                 computePass.end();
 
@@ -686,7 +700,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         pass.setVertexBuffer(0, data.vertexBuffer);
         pass.setBindGroup(0, data.bindGroups[data.step % 2]);
         // 2D points, so 2 points per vertex; draw a grid full of instances
-        pass.draw(data.vertices.length >> 1, gameWidth * gameHeight);
+        pass.draw(data.vertices.length >> 1, untrackedGridSize.width * untrackedGridSize.height);
 
         pass.end();
         data.device.queue.submit([encoder.finish()]);
@@ -712,8 +726,9 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
     const onMouseUp = (event: MouseEvent) => {
         if (mouseDragging) {
-            mouseOffsetX = modulo(mouseOffsetX + mouseDragX, gameWidth);
-            mouseOffsetY = modulo(mouseOffsetY + mouseDragY, gameHeight);
+            const untrackedGridSize = untrack(gridSize);
+            mouseOffsetX = modulo(mouseOffsetX + mouseDragX, untrackedGridSize.width);
+            mouseOffsetY = modulo(mouseOffsetY + mouseDragY, untrackedGridSize.height);
             mouseDragX = 0;
             mouseDragY = 0;
             mouseDragging = false;
@@ -730,8 +745,9 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         const { width, height } = untrack(canvasSize);
         const dragX = ((1 - newScale / untrackedScale) * (mouseClientX - 0.5 * width)) / newScale;
         const dragY = ((1 - newScale / untrackedScale) * (mouseClientY - 0.5 * height)) / newScale;
-        mouseOffsetX = modulo(mouseOffsetX + dragX, gameWidth);
-        mouseOffsetY = modulo(mouseOffsetY + dragY, gameHeight);
+        const untrackedGridSize = untrack(gridSize);
+        mouseOffsetX = modulo(mouseOffsetX + dragX, untrackedGridSize.width);
+        mouseOffsetY = modulo(mouseOffsetY + dragY, untrackedGridSize.height);
         setScale(newScale);
         event.preventDefault();
     };

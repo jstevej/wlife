@@ -13,9 +13,11 @@ function useGameOfLifeControlsProvider() {
     const [actualComputeFrameRate, setActualComputeFrameRate] = createSignal(1);
     const [actualRenderFrameRate, setActualRenderFrameRate] = createSignal(1);
     const [age, setAge] = createSignal(0);
+    const [canvasSize, setCanvasSize] = createSignal<Dimensions>({ height: 100, width: 100 });
     const [detectedFrameRate, setDetectedFrameRate] = createSignal(60);
     const [framesPerCompute, setFramesPerCompute] = createSignal(60);
     const [gradientName, setGradientName] = createSignal<GradientName>('agSunset');
+    const [gridSize, setGridSize] = createSignal<Dimensions>({ height: 0, width: 0 });
     const { listen: resetListen, emit: resetEmit } = createEventBus<void>(); // clear not used
     const [paused, setPaused] = createSignal(false);
     const [scale, setScale] = createSignal(1);
@@ -28,9 +30,11 @@ function useGameOfLifeControlsProvider() {
         actualComputeFrameRate,
         actualRenderFrameRate,
         age,
+        canvasSize,
         detectedFrameRate,
         framesPerCompute,
         gradientName,
+        gridSize,
         paused,
         resetEmit,
         resetListen,
@@ -38,9 +42,11 @@ function useGameOfLifeControlsProvider() {
         setActualComputeFrameRate,
         setActualRenderFrameRate,
         setAge,
+        setCanvasSize,
         setDetectedFrameRate,
         setFramesPerCompute,
         setGradientName,
+        setGridSize,
         setPaused,
         setScale,
         setShowAxes,

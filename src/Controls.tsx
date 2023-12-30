@@ -103,9 +103,11 @@ export const Controls: Component = () => {
         actualComputeFrameRate,
         actualRenderFrameRate,
         age,
+        canvasSize,
         detectedFrameRate,
         framesPerCompute,
         gradientName,
+        gridSize,
         paused,
         resetEmit,
         scale,
@@ -220,12 +222,6 @@ export const Controls: Component = () => {
                     <div>100</div>
                 </div>
             </div>
-            <div class="mt-1">
-                <div class="flex flex-row">
-                    <div class="flex-1">Zoom:</div>
-                    <div>{`${scale()} px/cell`}</div>
-                </div>
-            </div>
             <Checkbox label="Show Axes" value={showAxes()} onChange={setShowAxes} />
             <Checkbox
                 label="Background Age"
@@ -265,6 +261,20 @@ export const Controls: Component = () => {
                 <div class="flex flex-row">
                     <div class="flex-1">Compute:</div>
                     <div>{`${actualComputeFrameRate().toFixed(1)} fps`}</div>
+                </div>
+            </div>
+            <div class="mt-1">
+                <div class="flex flex-row">
+                    <div class="flex-1">Grid Size:</div>
+                    <div>{`${gridSize().width} x ${gridSize().height}`}</div>
+                </div>
+                <div class="flex flex-row">
+                    <div class="flex-1">Canvas Size:</div>
+                    <div>{`${canvasSize().width} x ${canvasSize().height}`}</div>
+                </div>
+                <div class="flex flex-row">
+                    <div class="flex-1">Zoom:</div>
+                    <div>{`${scale()} px/cell`}</div>
                 </div>
             </div>
             <div class="flex-1"></div>
