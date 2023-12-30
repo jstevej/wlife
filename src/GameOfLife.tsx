@@ -77,7 +77,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         gradientName,
         zoomIsInverted,
     } = useGameOfLifeControls();
-    const [ref, setRef] = createSignal<HTMLDivElement>();
+    const [canvasRef, setCanvasRef] = createSignal<HTMLDivElement>();
     let mouseDragging = false;
     let mouseClientX = 0;
     let mouseClientY = 0;
@@ -102,26 +102,41 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     const minRenderFrameRate = 30;
     let frameScheduleDelayMs = 1000 / 20;
     let frame = 0;
+    const [needsRender, setNeedsRender] = createSignal(false);
+    let needsRenderHeldTimeout: ReturnType<typeof setTimeout> | undefined;
+
+    // Resize canvas (throttled).
+
+    let resizeObserver: ResizeObserver | undefined;
 
     createEffect(() => {
-        const fooRef = ref();
-        if (fooRef === undefined) return;
-        const resizeObserver = new ResizeObserver(entries => {
+        const ref = canvasRef();
+        if (ref === undefined) return;
+        if (resizeObserver !== undefined) {
+            console.error(`canvasRef effect: resize observer not undefined`);
+            resizeObserver.unobserve(ref);
+        }
+
+        resizeObserver = new ResizeObserver(entries => {
             const rect = entries[0].contentRect;
             canvasSizeThrottle({
                 height: Math.floor(rect.height),
                 width: Math.floor(rect.width),
             });
         });
-        resizeObserver.observe(fooRef);
+        resizeObserver.observe(ref);
     });
+
+    // Update calculated frame rate.
 
     setInterval(() => {
         const fr = untrack(computeFrameRate);
         const startIndex = Math.max(computeFrameTimesMs.length - fr, 0);
         let timeMs = 0;
 
-        if (!untrack(paused)) {
+        if (untrack(paused)) {
+            setActualComputeFrameRate(0);
+        } else {
             for (let i = startIndex; i < computeFrameTimesMs.length; i++) {
                 timeMs += computeFrameTimesMs[i];
             }
@@ -129,14 +144,20 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             setActualComputeFrameRate((1000 * (computeFrameTimesMs.length - startIndex)) / timeMs);
         }
 
-        timeMs = 0;
+        if (untrack(paused) && needsRenderHeldTimeout === undefined) {
+            setActualRenderFrameRate(0);
+        } else {
+            timeMs = 0;
 
-        for (const frameTimeMs of renderFrameTimesMs) {
-            timeMs += frameTimeMs;
+            for (const frameTimeMs of renderFrameTimesMs) {
+                timeMs += frameTimeMs;
+            }
+
+            setActualRenderFrameRate((1000 * renderFrameTimesMs.length) / timeMs);
         }
-
-        setActualRenderFrameRate((1000 * renderFrameTimesMs.length) / timeMs);
     }, 1000);
+
+    // Update age.
 
     setInterval(() => {
         const untrackedGpuData = untrack(gpuData);
@@ -145,6 +166,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             setAge(untrackedGpuData.step);
         }
     }, 100);
+
+    // Initialilze GPU pipeline.
 
     const [gpuData] = createResource<GpuData | string>(async (): Promise<GpuData | string> => {
         // Setup canvas.
@@ -442,16 +465,26 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         return Math.ceil(minRenderFrameRate / computeFrameRate());
     };
 
+    // Frame scheduler. Runs on a timeout. Schedules next animation frame.
+
     const scheduleNextFrame = () => {
         updateTimeout = undefined;
 
+        if (animationFrameRequest !== undefined) {
+            console.error('scheduleNextFrame: animation frame request not undefined');
+        }
+
         animationFrameRequest = requestAnimationFrame(() => {
             const currFrameTime = Date.now();
-            animationFrameRequest = undefined;
             const doCompute = frame === 0 && !untrack(paused);
             const untrackedFramesPerCompute = untrack(framesPerCompute);
 
-            updateGrid(doCompute);
+            if (doCompute || needsRenderHeldTimeout !== undefined) {
+                updateGrid(doCompute);
+            }
+
+            setNeedsRender(false);
+            animationFrameRequest = undefined; // must happen after setNeedsRender
 
             if (doCompute) {
                 const measuredComputeFrameDurationMs = currFrameTime - prevComputeFrameTime;
@@ -471,19 +504,66 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             renderFrameTimesMs.push(currFrameTime - prevRenderFrameTime);
             prevRenderFrameTime = currFrameTime;
 
-            updateTimeout = setTimeout(scheduleNextFrame, frameScheduleDelayMs);
+            if (!untrack(paused) || needsRenderHeldTimeout !== undefined) {
+                console.log(`scheduleNextFrame: scheduling next frame in ${frameScheduleDelayMs}`);
+                if (updateTimeout !== undefined) {
+                    console.error('scheduleNextFrame: update timeout not undefined');
+                }
+                updateTimeout = setTimeout(scheduleNextFrame, frameScheduleDelayMs);
+            }
         });
     };
+
+    // Restart rendering when unpaused or controls changed. This also starts the initial render.
 
     createEffect(() => {
         const data = gpuData();
 
         if (data === undefined || typeof data === 'string') return;
 
-        if (animationFrameRequest !== undefined) cancelAnimationFrame(animationFrameRequest);
-        if (updateTimeout !== undefined) clearTimeout(updateTimeout);
-        updateTimeout = setTimeout(scheduleNextFrame, 1);
+        const pausedValue = paused();
+        const needsRenderValue = needsRender();
+
+        if (needsRenderValue) {
+            if (needsRenderHeldTimeout !== undefined) {
+                clearTimeout(needsRenderHeldTimeout);
+            }
+
+            console.log(`needsRender effect: setting needsRenderHeldTimeout`);
+            needsRenderHeldTimeout = setTimeout(() => {
+                needsRenderHeldTimeout = undefined;
+            }, 1000);
+        }
+
+
+        if (
+            (!pausedValue || needsRenderValue) &&
+            updateTimeout === undefined &&
+            animationFrameRequest === undefined
+        ) {
+            console.log(`needsRender effect: scheduling scheduleNextFrame`);
+            console.log(`needsRender effect:     paused: ${pausedValue}`);
+            console.log(`needsRender effect:     needsRender: ${needsRenderValue}`);
+            console.log(`needsRender effect:     updateTimeout = ${updateTimeout}`);
+            console.log(`needsRender effect:     animationFrameRequest = ${animationFrameRequest}`);
+            updateTimeout = setTimeout(scheduleNextFrame, frameScheduleDelayMs);
+        }
     });
+
+    // Update needsRender when controls change.
+
+    createEffect(() => {
+        canvasSize();
+        paused();
+        scale();
+        showAxes();
+        showBackgroundAge();
+        showGrid();
+        gradientName();
+        setNeedsRender(true);
+    });
+
+    // Set actualComputeFrameRate to 0 when paused.
 
     createEffect(() => {
         const isPaused = paused();
@@ -496,6 +576,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         }
     });
 
+    // Pass showAxes to GPU pipeline.
+
     createEffect(() => {
         const data = gpuData();
         const showAxesValue = showAxes() ? 1.0 : 0.0;
@@ -506,6 +588,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         data.device.queue.writeBuffer(data.simulationParamsStorage, 0, data.simulationParamsArray);
     });
 
+    // Pass showBackgroundAge to GPU pipeline.
+
     createEffect(() => {
         const data = gpuData();
         const showBackgroundAgeValue = showBackgroundAge() ? 1.0 : 0.0;
@@ -515,6 +599,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         data.simulationParamsArray[1] = showBackgroundAgeValue;
         data.device.queue.writeBuffer(data.simulationParamsStorage, 0, data.simulationParamsArray);
     });
+
+    // Pass showGrid to GPU pipeline.
 
     createEffect(() => {
         const data = gpuData();
@@ -533,6 +619,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         data.device.queue.writeBuffer(data.vertexBuffer, 0, data.vertices);
     });
 
+    // Pass gradient to GPU pipeline.
+
     createEffect(() => {
         const data = gpuData();
         const gradientNameValue = gradientName();
@@ -546,6 +634,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         );
     });
 
+    // Reset to random state on reset signal.
+
     resetListen(() => {
         const data = gpuData();
 
@@ -558,7 +648,10 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         }
 
         data.device.queue.writeBuffer(data.cellStateStorage[0], 0, data.cellStateArray);
+        setNeedsRender(true);
     });
+
+    // Run render and compute pipelines.
 
     const updateGrid = (doCompute: boolean) => {
         const data = gpuData();
@@ -621,17 +714,22 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         if (mouseDragging) {
             mouseDragX = (event.clientX - mouseStartX) / untrackedScale;
             mouseDragY = (event.clientY - mouseStartY) / untrackedScale;
+            setNeedsRender(true);
         }
+
         mouseClientX = event.clientX;
         mouseClientY = event.clientY;
     };
 
     const onMouseUp = (event: MouseEvent) => {
-        mouseOffsetX = modulo(mouseOffsetX + mouseDragX, gameWidth);
-        mouseOffsetY = modulo(mouseOffsetY + mouseDragY, gameHeight);
-        mouseDragX = 0;
-        mouseDragY = 0;
-        mouseDragging = false;
+        if (mouseDragging) {
+            mouseOffsetX = modulo(mouseOffsetX + mouseDragX, gameWidth);
+            mouseOffsetY = modulo(mouseOffsetY + mouseDragY, gameHeight);
+            mouseDragX = 0;
+            mouseDragY = 0;
+            mouseDragging = false;
+            setNeedsRender(true);
+        }
     };
 
     const onWheel = (event: WheelEvent) => {
@@ -673,7 +771,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                 </div>
             </Match>
             <Match when={true}>
-                <div {...rest} ref={setRef}>
+                <div {...rest} ref={setCanvasRef}>
                     <canvas
                         width={canvasSize().width}
                         height={canvasSize().height}
