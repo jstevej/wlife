@@ -1,4 +1,4 @@
-import { Component, createEffect, createMemo, createSignal, For, JSX, untrack } from 'solid-js';
+import { Component, createMemo, For, JSX, untrack } from 'solid-js';
 import PanZoomIcon from './assets/pan-zoom.svg';
 import { gridScaleLimit, useGameOfLifeControls } from './GameOfLifeControlsProvider';
 import { getGradientName, getGradientStops, gradientNames, isGradientName } from './Gradients';
@@ -131,12 +131,14 @@ export const Controls: Component = () => {
         const newValues: Array<number> = [];
         let currFrameRate = frameRate;
 
+        for (let i = 6; i > 0; i--) {
+            newValues.unshift(1 / (1 << i));
+        }
+
         while (currFrameRate > 0.5) {
             newValues.unshift(Math.round(frameRate / currFrameRate));
             currFrameRate *= 0.5;
         }
-
-        console.log(`framesPerComputeValues = ${JSON.stringify(newValues)}`);
 
         return newValues;
     });

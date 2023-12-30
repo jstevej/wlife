@@ -2,6 +2,7 @@ import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import {
     Component,
     createEffect,
+    createMemo,
     createResource,
     createSignal,
     JSX,
@@ -97,10 +98,18 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     let animationFrameRequest: ReturnType<typeof requestAnimationFrame> | undefined;
     const computeFrameTimesMs = new Array<number>(240).fill(1000);
     const renderFrameTimesMs = new Array<number>(240).fill(1000);
-    let prevRenderFrameTime = Date.now();
-    let prevComputeFrameTime = Date.now();
+    let prevRenderFrameTime = performance.now();
+    let prevComputeFrameTime = performance.now();
     const frameRateUpdateMs = 1000;
     let frame = 0;
+
+    // Calculate computes per frame. This can be greater than 1 because we support compute frame
+    // rates faster than the display frame rate.
+
+    const computesPerFrame = createMemo(() => {
+        const framesPerComputeValue = framesPerCompute();
+        return framesPerComputeValue >= 1 ? 1 : Math.round(1 / framesPerComputeValue);
+    });
 
     // Resize canvas (throttled).
 
@@ -134,26 +143,28 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             setActualComputeFrameRate(0);
         } else {
             const computeFramesPerInterval = Math.round(
-                framesPerInterval / untrack(framesPerCompute)
+                framesPerInterval / Math.max(untrack(framesPerCompute), 1)
             );
             const startIndex = Math.max(computeFrameTimesMs.length - computeFramesPerInterval, 0);
+            const numValues = computeFrameTimesMs.length - startIndex;
             let timeMs = 0;
 
             for (let i = startIndex; i < computeFrameTimesMs.length; i++) {
                 timeMs += computeFrameTimesMs[i];
             }
 
-            setActualComputeFrameRate((1000 * computeFramesPerInterval) / timeMs);
+            setActualComputeFrameRate((untrack(computesPerFrame) * (1000 * numValues)) / timeMs);
         }
 
         const startIndex = Math.max(renderFrameTimesMs.length - framesPerInterval, 0);
+        const numValues = renderFrameTimesMs.length - startIndex;
         let timeMs = 0;
 
         for (let i = startIndex; i < renderFrameTimesMs.length; i++) {
             timeMs += renderFrameTimesMs[i];
         }
 
-        setActualRenderFrameRate((1000 * framesPerInterval) / timeMs);
+        setActualRenderFrameRate((1000 * numValues) / timeMs);
     }, frameRateUpdateMs);
 
     // Update age.
@@ -506,17 +517,18 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         const untrackedPause = untrack(paused);
         const doCompute = frame === 0 && !untrackedPause;
         const untrackedFramesPerCompute = untrack(framesPerCompute);
+        const renderedFramesPerCompute = Math.max(untrackedFramesPerCompute, 1);
 
         updateGrid(doCompute);
 
         if (doCompute) {
-            const measuredComputeFrameDurationMs = timestamp - prevComputeFrameTime;
             computeFrameTimesMs.shift();
-            computeFrameTimesMs.push(measuredComputeFrameDurationMs);
+            computeFrameTimesMs.push(timestamp - prevComputeFrameTime);
             prevComputeFrameTime = timestamp;
         }
 
-        frame = ++frame % untrackedFramesPerCompute;
+        frame = ++frame % renderedFramesPerCompute;
+
         renderFrameTimesMs.shift();
         renderFrameTimesMs.push(timestamp - prevRenderFrameTime);
         prevRenderFrameTime = timestamp;
@@ -547,7 +559,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             setActualComputeFrameRate(0);
             frame = 0;
         } else {
-            prevComputeFrameTime = Date.now();
+            prevComputeFrameTime = performance.now();
         }
     });
 
@@ -644,15 +656,19 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         data.device.queue.writeBuffer(data.viewScaleStorage, 0, data.viewScaleArray);
 
         if (doCompute) {
-            const computePass = encoder.beginComputePass();
-            computePass.setPipeline(data.simulationPipeline);
-            computePass.setBindGroup(0, data.bindGroups[data.step % 2]);
-            const workgroupCountX = Math.ceil(gameWidth / data.workgroupSize);
-            const workgroupCountY = Math.ceil(gameHeight / data.workgroupSize);
-            computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
-            computePass.end();
+            let numComputes = untrack(computesPerFrame);
 
-            data.step++;
+            while (numComputes-- > 0) {
+                const computePass = encoder.beginComputePass();
+                computePass.setPipeline(data.simulationPipeline);
+                computePass.setBindGroup(0, data.bindGroups[data.step % 2]);
+                const workgroupCountX = Math.ceil(gameWidth / data.workgroupSize);
+                const workgroupCountY = Math.ceil(gameHeight / data.workgroupSize);
+                computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
+                computePass.end();
+
+                data.step++;
+            }
         }
 
         const pass = encoder.beginRenderPass({
