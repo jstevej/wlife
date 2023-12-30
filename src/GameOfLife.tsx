@@ -518,7 +518,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
     createEffect(() => {
         const data = gpuData();
-        const fact = showGrid() && scale() > gridScaleLimit ? 1 - 2 / scale() : 1;
+        const fact = showGrid() && scale() >= gridScaleLimit ? 1 - 2 / scale() : 1;
 
         if (data === undefined || typeof data === 'string') return;
 
