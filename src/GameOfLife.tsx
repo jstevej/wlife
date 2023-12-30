@@ -63,7 +63,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     const gameWidth = window.screen.width;
     const [, rest] = splitProps(props, ['foo']);
     const {
-        computeFrameRate,
+        detectedFrameRate,
+        framesPerCompute,
         paused,
         resetListen,
         scale,
@@ -94,16 +95,12 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         500
     );
     let animationFrameRequest: ReturnType<typeof requestAnimationFrame> | undefined;
-    const computeFrameTimesMs = new Array<number>(60).fill(1000);
-    const renderFrameTimesMs = new Array<number>(60).fill(1000);
+    const computeFrameTimesMs = new Array<number>(240).fill(1000);
+    const renderFrameTimesMs = new Array<number>(240).fill(1000);
     let prevRenderFrameTime = Date.now();
     let prevComputeFrameTime = Date.now();
-    let updateTimeout: ReturnType<typeof setTimeout> | undefined;
-    const minRenderFrameRate = 30;
-    let frameScheduleDelayMs = 1000 / 20;
+    const frameRateUpdateMs = 1000;
     let frame = 0;
-    const [needsRender, setNeedsRender] = createSignal(false);
-    let needsRenderHeldTimeout: ReturnType<typeof setTimeout> | undefined;
 
     // Resize canvas (throttled).
 
@@ -130,32 +127,34 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     // Update calculated frame rate.
 
     setInterval(() => {
-        const fr = untrack(computeFrameRate);
-        const startIndex = Math.max(computeFrameTimesMs.length - fr, 0);
-        let timeMs = 0;
+        const fr = untrack(detectedFrameRate);
+        const framesPerInterval = fr * frameRateUpdateMs * 0.001;
 
         if (untrack(paused)) {
             setActualComputeFrameRate(0);
         } else {
+            const computeFramesPerInterval = Math.round(
+                framesPerInterval / untrack(framesPerCompute)
+            );
+            const startIndex = Math.max(computeFrameTimesMs.length - computeFramesPerInterval, 0);
+            let timeMs = 0;
+
             for (let i = startIndex; i < computeFrameTimesMs.length; i++) {
                 timeMs += computeFrameTimesMs[i];
             }
 
-            setActualComputeFrameRate((1000 * (computeFrameTimesMs.length - startIndex)) / timeMs);
+            setActualComputeFrameRate((1000 * computeFramesPerInterval) / timeMs);
         }
 
-        if (untrack(paused) && needsRenderHeldTimeout === undefined) {
-            setActualRenderFrameRate(0);
-        } else {
-            timeMs = 0;
+        const startIndex = Math.max(renderFrameTimesMs.length - framesPerInterval, 0);
+        let timeMs = 0;
 
-            for (const frameTimeMs of renderFrameTimesMs) {
-                timeMs += frameTimeMs;
-            }
-
-            setActualRenderFrameRate((1000 * renderFrameTimesMs.length) / timeMs);
+        for (let i = startIndex; i < renderFrameTimesMs.length; i++) {
+            timeMs += renderFrameTimesMs[i];
         }
-    }, 1000);
+
+        setActualRenderFrameRate((1000 * framesPerInterval) / timeMs);
+    }, frameRateUpdateMs);
 
     // Update age.
 
@@ -167,9 +166,52 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         }
     }, 100);
 
+    const insertSorted = <T,>(array: Array<T>, value: T) => {
+        let low = 0;
+        let high = array.length;
+
+        while (low < high) {
+            const mid = (low + high) >>> 1;
+            if (array[mid] < value) low = mid + 1;
+            else high = mid;
+        }
+
+        array.splice(low, 0, value);
+    };
+
     // Initialilze GPU pipeline.
 
     const [gpuData] = createResource<GpuData | string>(async (): Promise<GpuData | string> => {
+        // Detect frame rate. We do this by requesting a number of animation frames, measuring the
+        // time between them, and choosing the smallest of the measured times. Choosing the smallest
+        // of many measured times helps to filter out missed frames due to system load. Also, the
+        // timestamp returned by requestAnimationFrame provides much more accurate and consistent
+        // results than explicitly grabbing timestamps with performance.now().
+
+        console.log(`detecting frame rate...`);
+
+        const frameTimesMs: Array<number> = [];
+        const detectionStart = performance.now();
+        let prevFrameTimestamp = 0;
+
+        while (performance.now() - detectionStart < 100) {
+            await new Promise<void>(resolve => {
+                requestAnimationFrame(frameTimestamp => {
+                    if (prevFrameTimestamp !== 0) {
+                        insertSorted(frameTimesMs, frameTimestamp - prevFrameTimestamp);
+                    }
+                    prevFrameTimestamp = frameTimestamp;
+                    resolve();
+                });
+            });
+        }
+
+        const measuredFrameRate = 1000 / frameTimesMs[frameTimesMs.length >> 1];
+        const detectedFrameRate = Math.round(measuredFrameRate);
+
+        console.log(`measured frame rate = ${measuredFrameRate.toFixed(3)} fps`);
+        console.log(`detected frame rate = ${detectedFrameRate} fps`);
+
         // Setup canvas.
 
         if (!navigator.gpu) return `WebGPU not supported on this browser`;
@@ -457,110 +499,43 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         };
     });
 
-    const framesPerCompute = () => {
-        if (computeFrameRate() > minRenderFrameRate) {
-            return 1;
-        }
-
-        return Math.ceil(minRenderFrameRate / computeFrameRate());
-    };
-
     // Frame scheduler. Runs on a timeout. Schedules next animation frame.
 
-    const scheduleNextFrame = () => {
-        updateTimeout = undefined;
+    const doAnimationFrame = (timestamp: number) => {
+        animationFrameRequest = undefined;
+        const untrackedPause = untrack(paused);
+        const doCompute = frame === 0 && !untrackedPause;
+        const untrackedFramesPerCompute = untrack(framesPerCompute);
 
-        if (animationFrameRequest !== undefined) {
-            console.error('scheduleNextFrame: animation frame request not undefined');
+        updateGrid(doCompute);
+
+        if (doCompute) {
+            const measuredComputeFrameDurationMs = timestamp - prevComputeFrameTime;
+            computeFrameTimesMs.shift();
+            computeFrameTimesMs.push(measuredComputeFrameDurationMs);
+            prevComputeFrameTime = timestamp;
         }
 
-        animationFrameRequest = requestAnimationFrame(() => {
-            const currFrameTime = Date.now();
-            const doCompute = frame === 0 && !untrack(paused);
-            const untrackedFramesPerCompute = untrack(framesPerCompute);
+        frame = ++frame % untrackedFramesPerCompute;
+        renderFrameTimesMs.shift();
+        renderFrameTimesMs.push(timestamp - prevRenderFrameTime);
+        prevRenderFrameTime = timestamp;
 
-            if (doCompute || needsRenderHeldTimeout !== undefined) {
-                updateGrid(doCompute);
-            }
-
-            setNeedsRender(false);
-            animationFrameRequest = undefined; // must happen after setNeedsRender
-
-            if (doCompute) {
-                const measuredComputeFrameDurationMs = currFrameTime - prevComputeFrameTime;
-                const targetComputeFrameDurationMs = 1000 / untrack(computeFrameRate);
-                const frameDiffMs = targetComputeFrameDurationMs - measuredComputeFrameDurationMs;
-
-                computeFrameTimesMs.shift();
-                computeFrameTimesMs.push(measuredComputeFrameDurationMs);
-                prevComputeFrameTime = currFrameTime;
-
-                frameScheduleDelayMs += frameDiffMs / untrackedFramesPerCompute;
-                frameScheduleDelayMs = Math.max(frameScheduleDelayMs, 0);
-            }
-
-            frame = ++frame % untrackedFramesPerCompute;
-            renderFrameTimesMs.shift();
-            renderFrameTimesMs.push(currFrameTime - prevRenderFrameTime);
-            prevRenderFrameTime = currFrameTime;
-
-            if (!untrack(paused) || needsRenderHeldTimeout !== undefined) {
-                console.log(`scheduleNextFrame: scheduling next frame in ${frameScheduleDelayMs}`);
-                if (updateTimeout !== undefined) {
-                    console.error('scheduleNextFrame: update timeout not undefined');
-                }
-                updateTimeout = setTimeout(scheduleNextFrame, frameScheduleDelayMs);
-            }
-        });
+        animationFrameRequest = requestAnimationFrame(doAnimationFrame);
     };
 
-    // Restart rendering when unpaused or controls changed. This also starts the initial render.
+    // Start initial render.
 
     createEffect(() => {
         const data = gpuData();
 
         if (data === undefined || typeof data === 'string') return;
 
-        const pausedValue = paused();
-        const needsRenderValue = needsRender();
-
-        if (needsRenderValue) {
-            if (needsRenderHeldTimeout !== undefined) {
-                clearTimeout(needsRenderHeldTimeout);
-            }
-
-            console.log(`needsRender effect: setting needsRenderHeldTimeout`);
-            needsRenderHeldTimeout = setTimeout(() => {
-                needsRenderHeldTimeout = undefined;
-            }, 1000);
+        if (animationFrameRequest === undefined) {
+            animationFrameRequest = requestAnimationFrame(doAnimationFrame);
+        } else {
+            console.error(`initial render effect: animationFrameRequest not undefined`);
         }
-
-
-        if (
-            (!pausedValue || needsRenderValue) &&
-            updateTimeout === undefined &&
-            animationFrameRequest === undefined
-        ) {
-            console.log(`needsRender effect: scheduling scheduleNextFrame`);
-            console.log(`needsRender effect:     paused: ${pausedValue}`);
-            console.log(`needsRender effect:     needsRender: ${needsRenderValue}`);
-            console.log(`needsRender effect:     updateTimeout = ${updateTimeout}`);
-            console.log(`needsRender effect:     animationFrameRequest = ${animationFrameRequest}`);
-            updateTimeout = setTimeout(scheduleNextFrame, frameScheduleDelayMs);
-        }
-    });
-
-    // Update needsRender when controls change.
-
-    createEffect(() => {
-        canvasSize();
-        paused();
-        scale();
-        showAxes();
-        showBackgroundAge();
-        showGrid();
-        gradientName();
-        setNeedsRender(true);
     });
 
     // Set actualComputeFrameRate to 0 when paused.
@@ -648,7 +623,6 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         }
 
         data.device.queue.writeBuffer(data.cellStateStorage[0], 0, data.cellStateArray);
-        setNeedsRender(true);
     });
 
     // Run render and compute pipelines.
@@ -714,7 +688,6 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         if (mouseDragging) {
             mouseDragX = (event.clientX - mouseStartX) / untrackedScale;
             mouseDragY = (event.clientY - mouseStartY) / untrackedScale;
-            setNeedsRender(true);
         }
 
         mouseClientX = event.clientX;
@@ -728,7 +701,6 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             mouseDragX = 0;
             mouseDragY = 0;
             mouseDragging = false;
-            setNeedsRender(true);
         }
     };
 

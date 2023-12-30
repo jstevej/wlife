@@ -1,4 +1,4 @@
-import { Component, createEffect, createSignal, For, JSX } from 'solid-js';
+import { Component, createEffect, createMemo, createSignal, For, JSX, untrack } from 'solid-js';
 import PanZoomIcon from './assets/pan-zoom.svg';
 import { gridScaleLimit, useGameOfLifeControls } from './GameOfLifeControlsProvider';
 import { getGradientName, getGradientStops, gradientNames, isGradientName } from './Gradients';
@@ -69,7 +69,7 @@ type SliderProps = {
     max: number;
     min: number;
     onInput: (value: number) => void;
-    step: number;
+    step?: number;
     title: string;
     value: number;
 } & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onInput'>;
@@ -90,7 +90,7 @@ const Slider: Component<SliderProps> = props => {
                 type="range"
                 min={props.min}
                 max={props.max}
-                step={props.step}
+                step={props.step ?? 1}
                 value={props.value}
                 onInput={onSliderValueChanged}
             />
@@ -103,13 +103,14 @@ export const Controls: Component = () => {
         actualComputeFrameRate,
         actualRenderFrameRate,
         age,
-        computeFrameRate,
+        detectedFrameRate,
+        framesPerCompute,
         gradientName,
         paused,
         resetEmit,
         scale,
         setGradientName,
-        setComputeFrameRate,
+        setFramesPerCompute,
         setPaused,
         setShowAxes,
         setShowBackgroundAge,
@@ -120,32 +121,46 @@ export const Controls: Component = () => {
         showGrid,
         zoomIsInverted,
     } = useGameOfLifeControls();
-    const [sliderFrameRate, setSliderFrameRate] = createSignal(20);
 
     const gradientStops = () => {
         return getGradientStops(gradientName()).join(', ');
     };
 
-    createEffect(() => {
-        const fr = sliderFrameRate();
-        setComputeFrameRate(fr > 0 ? fr : 1);
+    const framesPerComputeValues = createMemo<Array<number>>(() => {
+        const frameRate = detectedFrameRate();
+        const newValues: Array<number> = [];
+        let currFrameRate = frameRate;
+
+        while (currFrameRate > 0.5) {
+            newValues.unshift(Math.round(frameRate / currFrameRate));
+            currFrameRate *= 0.5;
+        }
+
+        console.log(`framesPerComputeValues = ${JSON.stringify(newValues)}`);
+
+        return newValues;
     });
 
-    const onFrameRateSliderChanged = (value: number) => {
-        setSliderFrameRate(value);
+    const onSpeedSliderChanged = (value: number) => {
+        setFramesPerCompute(untrack(framesPerComputeValues)[value]);
+    };
+
+    const getSpeedSliderValue = () => {
+        const currValue = framesPerCompute();
+        const index = framesPerComputeValues().indexOf(currValue);
+        return index >= 0 ? index : 0;
     };
 
     return (
         <div class="flex flex-col mx-2 divide-y divide-solid">
             <h1>Controls</h1>
             <Slider
-                title="Frame Rate"
-                displayValue={`${computeFrameRate()} fps`}
+                title="Speed"
+                displayValue={`${(detectedFrameRate() / framesPerCompute()).toFixed(1)} fps`}
                 min={0}
-                max={60}
-                step={5}
-                onInput={onFrameRateSliderChanged}
-                value={sliderFrameRate()}
+                max={framesPerComputeValues().length - 1}
+                onInput={onSpeedSliderChanged}
+                value={getSpeedSliderValue()}
             />
             <div>
                 <Select
