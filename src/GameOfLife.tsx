@@ -11,7 +11,7 @@ import {
     untrack,
 } from 'solid-js';
 import cellShaderCode from './CellShader.wgsl?raw';
-import { useGameOfLifeControls } from './GameOfLifeControlsProvider';
+import { gridScaleLimit, useGameOfLifeControls } from './GameOfLifeControlsProvider';
 import { getGradientValues } from './Gradients';
 import simulationShaderCode from './SimulationShader.wgsl?raw';
 
@@ -66,9 +66,11 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         computeFrameRate,
         paused,
         resetListen,
+        scale,
         setActualComputeFrameRate,
         setActualRenderFrameRate,
         setAge,
+        setScale,
         showAxes,
         showBackgroundAge,
         showGrid,
@@ -85,7 +87,6 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     let mouseDragY = 0;
     let mouseOffsetX = gameWidth >> 1;
     let mouseOffsetY = gameHeight >> 1;
-    const [scale, setScale] = createSignal(1);
     const [canvasSize, setCanvasSize] = createSignal<Dimensions>({ height: 100, width: 100 });
     const canvasSizeThrottle = leadingAndTrailing(
         throttle,
@@ -517,7 +518,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
     createEffect(() => {
         const data = gpuData();
-        const fact = showGrid() && scale() > 3 ? 1 - 2 / scale() : 1;
+        const fact = showGrid() && scale() > gridScaleLimit ? 1 - 2 / scale() : 1;
 
         if (data === undefined || typeof data === 'string') return;
 

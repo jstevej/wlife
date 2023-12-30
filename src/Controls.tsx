@@ -1,15 +1,17 @@
 import { Component, createEffect, createSignal, For, JSX } from 'solid-js';
 import PanZoomIcon from './assets/pan-zoom.svg';
-import { useGameOfLifeControls } from './GameOfLifeControlsProvider';
+import { gridScaleLimit, useGameOfLifeControls } from './GameOfLifeControlsProvider';
 import { getGradientName, getGradientStops, gradientNames, isGradientName } from './Gradients';
 
 type CheckboxProps = {
+    disabled?: boolean;
     label: string;
     onChange: (checked: boolean) => void;
     value: boolean;
 } & Omit<JSX.HTMLAttributes<HTMLDivElement>, 'onChange'>;
 
 const Checkbox: Component<CheckboxProps> = props => {
+    const isDisabled = () => props.disabled ?? false;
     const onChange = (event: Event) => {
         const target = event.target as HTMLInputElement | null;
         props.onChange(target?.checked ?? false);
@@ -17,8 +19,16 @@ const Checkbox: Component<CheckboxProps> = props => {
 
     return (
         <div>
-            <input type="checkbox" checked={props.value} onChange={onChange} />
-            <label class="ml-2" onClick={() => props.onChange(!props.value)}>
+            <input
+                type="checkbox"
+                checked={props.value}
+                disabled={isDisabled()}
+                onChange={onChange}
+            />
+            <label
+                class={isDisabled() ? 'ml-2 text-gray-400' : 'ml-2'}
+                onClick={() => props.onChange(!props.value)}
+            >
                 {props.label}
             </label>
         </div>
@@ -97,6 +107,7 @@ export const Controls: Component = () => {
         gradientName,
         paused,
         resetEmit,
+        scale,
         setGradientName,
         setComputeFrameRate,
         setPaused,
@@ -159,13 +170,24 @@ export const Controls: Component = () => {
                     <div>100</div>
                 </div>
             </div>
+            <div class="mt-1">
+                <div class="flex flex-row">
+                    <div class="flex-1">Zoom:</div>
+                    <div>{`${scale()} px/cell`}</div>
+                </div>
+            </div>
             <Checkbox label="Show Axes" value={showAxes()} onChange={setShowAxes} />
             <Checkbox
                 label="Background Age"
                 value={showBackgroundAge()}
                 onChange={setShowBackgroundAge}
             />
-            <Checkbox label="Show Grid" value={showGrid()} onChange={setShowGrid} />
+            <Checkbox
+                label="Show Grid"
+                value={showGrid()}
+                disabled={scale() < gridScaleLimit}
+                onChange={setShowGrid}
+            />
             <Checkbox label="Invert Zoom" value={zoomIsInverted()} onChange={setZoomIsInverted} />
             <div>
                 <div class="flex flex-col mt-1">

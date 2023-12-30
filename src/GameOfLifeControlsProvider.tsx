@@ -7,6 +7,8 @@ export type Dimensions = {
     width: number;
 };
 
+export const gridScaleLimit = 3;
+
 function useGameOfLifeControlsProvider() {
     const [actualComputeFrameRate, setActualComputeFrameRate] = createSignal(1);
     const [actualRenderFrameRate, setActualRenderFrameRate] = createSignal(1);
@@ -15,6 +17,7 @@ function useGameOfLifeControlsProvider() {
     const [gradientName, setGradientName] = createSignal<GradientName>('agSunset');
     const { listen: resetListen, emit: resetEmit } = createEventBus<void>(); // clear not used
     const [paused, setPaused] = createSignal(false);
+    const [scale, setScale] = createSignal(1);
     const [showAxes, setShowAxes] = createSignal(false);
     const [showBackgroundAge, setShowBackgroundAge] = createSignal(true);
     const [showGrid, setShowGrid] = createSignal(false);
@@ -29,12 +32,14 @@ function useGameOfLifeControlsProvider() {
         paused,
         resetEmit,
         resetListen,
+        scale,
         setActualComputeFrameRate,
         setActualRenderFrameRate,
         setAge,
         setComputeFrameRate,
         setGradientName,
         setPaused,
+        setScale,
         setShowAxes,
         setShowBackgroundAge,
         setShowGrid,
