@@ -16,6 +16,8 @@ import { gridScaleLimit, useGameOfLifeControls } from './GameOfLifeControlsProvi
 import { getGradientValues } from './Gradients';
 import simulationShaderCode from './SimulationShader.wgsl?raw';
 
+const useFullResolution = false;
+
 export type GameOfLifeProps = {
     foo?: string;
 } & JSX.HTMLAttributes<HTMLDivElement>;
@@ -58,6 +60,7 @@ function modulo(x: number, n: number): number {
 }
 
 const maxAge = 100;
+const foo = 0.6;
 
 export const GameOfLife: Component<GameOfLifeProps> = props => {
     const [, rest] = splitProps(props, ['foo']);
@@ -81,7 +84,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         gradientName,
         zoomIsInverted,
     } = useGameOfLifeControls();
-    const [canvasRef, setCanvasRef] = createSignal<HTMLDivElement>();
+    const [canvasContainerRef, setCanvasContainerRef] = createSignal<HTMLDivElement>();
     let mouseDragging = false;
     let mouseClientX = 0;
     let mouseClientY = 0;
@@ -98,6 +101,18 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                 `canvas size = ${dim.width} x ${dim.height}, dpr = ${window.devicePixelRatio}`
             );
             setCanvasSize(dim);
+            const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
+
+            if (useFullResolution) {
+                canvas.style.width = `${dim.width / window.devicePixelRatio}px`;
+                canvas.style.height = `${dim.height / window.devicePixelRatio}px`;
+            } else {
+                canvas.style.width = `${dim.width}px`;
+                canvas.style.height = `${dim.height}px`;
+            }
+
+            canvas.width = dim.width;
+            canvas.height = dim.height;
         },
         500
     );
@@ -109,7 +124,17 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     const frameRateUpdateMs = 1000;
     let frame = 0;
 
-    setGridSize({ height: window.screen.height, width: window.screen.width });
+    if (useFullResolution) {
+        setGridSize({
+            height: window.screen.height * window.devicePixelRatio,
+            width: window.screen.width * window.devicePixelRatio,
+        });
+    } else {
+        setGridSize({
+            height: window.screen.height,
+            width: window.screen.width,
+        });
+    }
 
     console.log(
         `screen size = ${window.screen.width} x ${window.screen.height}, dpr = ${window.devicePixelRatio}`
@@ -128,19 +153,26 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     let resizeObserver: ResizeObserver | undefined;
 
     createEffect(() => {
-        const ref = canvasRef();
+        const ref = canvasContainerRef();
         if (ref === undefined) return;
         if (resizeObserver !== undefined) {
-            console.error(`canvasRef effect: resize observer not undefined`);
+            console.error(`canvasContainerRef effect: resize observer not undefined`);
             resizeObserver.unobserve(ref);
         }
 
         resizeObserver = new ResizeObserver(entries => {
             const rect = entries[0].contentRect;
-            canvasSizeThrottle({
-                height: Math.floor(rect.height),
-                width: Math.floor(rect.width),
-            });
+            if (useFullResolution) {
+                canvasSizeThrottle({
+                    height: Math.floor(rect.height * window.devicePixelRatio),
+                    width: Math.floor(rect.width * window.devicePixelRatio),
+                });
+            } else {
+                canvasSizeThrottle({
+                    height: Math.floor(rect.height),
+                    width: Math.floor(rect.width),
+                });
+            }
         });
         resizeObserver.observe(ref);
     });
@@ -244,7 +276,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         if (!adapter) return `WebGPU adapter not found`;
 
         const device = await adapter.requestDevice();
-        const canvas = document.querySelector('canvas');
+        const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 
         if (!canvas) return `canvas element not found`;
 
@@ -335,7 +367,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             }),
         ];
         for (let i = 0; i < cellStateArray.length; i++) {
-            cellStateArray[i] = Math.random() > 0.6 ? 1 : 0;
+            cellStateArray[i] = Math.random() > foo ? 1 : 0;
         }
         device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray);
 
@@ -644,7 +676,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         data.step = 0;
 
         for (let i = 0; i < data.cellStateArray.length; i++) {
-            data.cellStateArray[i] = Math.random() > 0.6 ? 1 : 0;
+            data.cellStateArray[i] = Math.random() > foo ? 1 : 0;
         }
 
         data.device.queue.writeBuffer(data.cellStateStorage[0], 0, data.cellStateArray);
@@ -716,12 +748,22 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         const untrackedScale = untrack(scale);
 
         if (mouseDragging) {
-            mouseDragX = (event.clientX - mouseStartX) / untrackedScale;
-            mouseDragY = (event.clientY - mouseStartY) / untrackedScale;
+            if (useFullResolution) {
+                mouseDragX = (window.devicePixelRatio * (event.clientX - mouseStartX)) / untrackedScale;
+                mouseDragY = (window.devicePixelRatio * (event.clientY - mouseStartY)) / untrackedScale;
+            } else {
+                mouseDragX = (event.clientX - mouseStartX) / untrackedScale;
+                mouseDragY = (event.clientY - mouseStartY) / untrackedScale;
+            }
         }
 
-        mouseClientX = event.clientX;
-        mouseClientY = event.clientY;
+        if (useFullResolution) {
+            mouseClientX = event.clientX * window.devicePixelRatio;
+            mouseClientY = event.clientY * window.devicePixelRatio;
+        } else {
+            mouseClientX = event.clientX;
+            mouseClientY = event.clientY;
+        }
     };
 
     const onMouseUp = (event: MouseEvent) => {
@@ -739,7 +781,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         const untrackedScale = untrack(scale);
         const invert = untrack(zoomIsInverted) ? 1 : -1;
         const direction = Math.sign(event.deltaY);
-        const newScale = Math.min(Math.max(untrackedScale + invert * direction, 1), 15);
+        const newScale = Math.min(Math.max(untrackedScale + invert * direction, 1), 20);
         if (newScale === untrackedScale) return;
 
         const { width, height } = untrack(canvasSize);
@@ -775,10 +817,9 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                 </div>
             </Match>
             <Match when={true}>
-                <div {...rest} ref={setCanvasRef}>
+                <div {...rest} ref={setCanvasContainerRef}>
                     <canvas
-                        width={canvasSize().width}
-                        height={canvasSize().height}
+                        id="gameCanvas"
                         onMouseDown={onMouseDown}
                         onMouseMove={onMouseMove}
                         onMouseOut={onMouseUp}

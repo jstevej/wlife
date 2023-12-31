@@ -13,6 +13,9 @@ struct SimParams {
     showBackgroundAge: f32,
 };
 
+const maxAge = 100i;
+const minAge = -100i;
+
 @group(0) @binding(0) var<uniform> gridSize: vec2f;
 @group(0) @binding(1) var<storage> viewScale: vec2f;
 @group(0) @binding(2) var<storage> viewOffset: vec2f;
@@ -50,9 +53,9 @@ fn cellIndex(cell: vec2f) -> u32 {
 fn fragmentMain(input: VertexOutput) -> @location(0) vec4f {
     let state = cellState[cellIndex(input.cell)];
     let isAlive = f32(state > 0);
-    let age = max(min(state, 100), -100);
+    let age = max(min(state, maxAge), minAge);
     let age3 = 3 * abs(age);
-    let isNotOldest = f32(age > -100);
+    let isNotOldest = f32(age > minAge);
     let isAxis = (1 - isAlive) * simParams.showAxes * f32(input.cell.x == 0 || input.cell.y == 0);
     let f = isAlive + (1 - isAlive) * 0.2 * simParams.showBackgroundAge * isNotOldest;
     let axisColor = vec3f(0.0, 1.0, 0.0);
