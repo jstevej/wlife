@@ -109,8 +109,8 @@ export const Controls: Component = () => {
         gradientName,
         gridSize,
         paused,
+        pixelsPerCell,
         resetEmit,
-        scale,
         setGradientName,
         setFramesPerCompute,
         setPaused,
@@ -231,7 +231,7 @@ export const Controls: Component = () => {
             <Checkbox
                 label="Show Grid"
                 value={showGrid()}
-                disabled={scale() < gridScaleLimit}
+                disabled={pixelsPerCell() < gridScaleLimit}
                 onChange={setShowGrid}
             />
             <Checkbox label="Invert Zoom" value={zoomIsInverted()} onChange={setZoomIsInverted} />
@@ -274,7 +274,7 @@ export const Controls: Component = () => {
                 </div>
                 <div class="flex flex-row">
                     <div class="flex-1">Zoom:</div>
-                    <div>{`${scale()} px/cell`}</div>
+                    <div>{`${pixelsPerCell()} px/cell`}</div>
                 </div>
             </div>
             <div class="flex-1"></div>

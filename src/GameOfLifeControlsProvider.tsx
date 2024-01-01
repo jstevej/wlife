@@ -20,7 +20,7 @@ function useGameOfLifeControlsProvider() {
     const [gridSize, setGridSize] = createSignal<Dimensions>({ height: 0, width: 0 });
     const { listen: resetListen, emit: resetEmit } = createEventBus<void>(); // clear not used
     const [paused, setPaused] = createSignal(false);
-    const [scale, setScale] = createSignal(1);
+    const [pixelsPerCell, setPixelsPerCell] = createSignal(1);
     const [showAxes, setShowAxes] = createSignal(false);
     const [showBackgroundAge, setShowBackgroundAge] = createSignal(true);
     const [showGrid, setShowGrid] = createSignal(false);
@@ -36,9 +36,9 @@ function useGameOfLifeControlsProvider() {
         gradientName,
         gridSize,
         paused,
+        pixelsPerCell,
         resetEmit,
         resetListen,
-        scale,
         setActualComputeFrameRate,
         setActualRenderFrameRate,
         setAge,
@@ -48,7 +48,7 @@ function useGameOfLifeControlsProvider() {
         setGradientName,
         setGridSize,
         setPaused,
-        setScale,
+        setPixelsPerCell,
         setShowAxes,
         setShowBackgroundAge,
         setShowGrid,

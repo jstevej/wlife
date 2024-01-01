@@ -16,7 +16,7 @@ import { gridScaleLimit, useGameOfLifeControls } from './GameOfLifeControlsProvi
 import { getGradientValues } from './Gradients';
 import simulationShaderCode from './SimulationShader.wgsl?raw';
 
-const useFullResolution = false;
+const useFullResolution = true;
 
 export type GameOfLifeProps = {
     foo?: string;
@@ -37,16 +37,16 @@ type GpuData = {
     device: GPUDevice;
     gridSizeArray: Float32Array;
     gridSizeBuffer: GPUBuffer;
+    offsetCellsArray: Float32Array;
+    offsetCellsStorage: GPUBuffer;
+    pixelsPerCellArray: Float32Array;
+    pixelsPerCellStorage: GPUBuffer;
     step: number;
     simulationParamsArray: Float32Array;
     simulationParamsStorage: GPUBuffer;
     simulationPipeline: GPUComputePipeline;
     vertexBuffer: GPUBuffer;
     vertices: Float32Array;
-    viewOffsetArray: Float32Array;
-    viewOffsetStorage: GPUBuffer;
-    viewScaleArray: Float32Array;
-    viewScaleStorage: GPUBuffer;
     workgroupSize: number;
 };
 
@@ -65,19 +65,18 @@ const foo = 0.6;
 export const GameOfLife: Component<GameOfLifeProps> = props => {
     const [, rest] = splitProps(props, ['foo']);
     const {
-        canvasSize,
         detectedFrameRate,
         framesPerCompute,
         gridSize,
         paused,
         resetListen,
-        scale,
+        pixelsPerCell,
         setActualComputeFrameRate,
         setActualRenderFrameRate,
         setAge,
         setCanvasSize,
         setGridSize,
-        setScale,
+        setPixelsPerCell,
         showAxes,
         showBackgroundAge,
         showGrid,
@@ -92,8 +91,10 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     let mouseStartY = 0;
     let mouseDragX = 0;
     let mouseDragY = 0;
-    let mouseOffsetX = window.screen.width >> 1;
-    let mouseOffsetY = window.screen.height >> 1;
+    // Offsets are stored as fractional number of grid cells.
+    let offsetCellsX = 0;
+    let offsetCellsY = 0;
+    let offsetCellsInitialized = false;
     const canvasSizeThrottle = leadingAndTrailing(
         throttle,
         (dim: Dimensions) => {
@@ -113,6 +114,12 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
             canvas.width = dim.width;
             canvas.height = dim.height;
+
+            if (!offsetCellsInitialized) {
+                offsetCellsX = dim.width >> 1;
+                offsetCellsY = dim.height >> 1;
+                offsetCellsInitialized = true;
+            }
         },
         500
     );
@@ -315,26 +322,23 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         });
         device.queue.writeBuffer(gridSizeBuffer, 0, gridSizeArray);
 
-        const viewScaleArray = new Float32Array([
-            (4 * untrackedGridSize.width) / canvasSize().width,
-            (4 * untrackedGridSize.height) / canvasSize().height,
-        ]);
-        const viewScaleStorage = device.createBuffer({
-            label: 'viewScale storage',
-            size: viewScaleArray.byteLength,
+        const pixelsPerCellArray = new Float32Array([4, 4]);
+        const pixelsPerCellStorage = device.createBuffer({
+            label: 'pixelsPerCell storage',
+            size: pixelsPerCellArray.byteLength,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         });
-        device.queue.writeBuffer(viewScaleStorage, 0, viewScaleArray);
+        device.queue.writeBuffer(pixelsPerCellStorage, 0, pixelsPerCellArray);
 
-        const viewOffsetArray = new Float32Array([0, 0]);
-        const viewOffsetStorage = device.createBuffer({
-            label: 'viewOffset storage',
-            size: viewOffsetArray.byteLength,
+        const offsetCellsArray = new Float32Array([0, 0]);
+        const offsetCellsStorage = device.createBuffer({
+            label: 'offsetCells storage',
+            size: offsetCellsArray.byteLength,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         });
-        device.queue.writeBuffer(viewOffsetStorage, 0, viewOffsetArray);
+        device.queue.writeBuffer(offsetCellsStorage, 0, offsetCellsArray);
 
-        const simulationParamsArray = new Float32Array([0.0, 0.0]);
+        const simulationParamsArray = new Float32Array([0.0, 0.0, 0.0]);
         const simulationParamsStorage = device.createBuffer({
             label: 'simulationParams storage',
             size: simulationParamsArray.byteLength,
@@ -442,11 +446,11 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                     },
                     {
                         binding: 1,
-                        resource: { buffer: viewScaleStorage },
+                        resource: { buffer: pixelsPerCellStorage },
                     },
                     {
                         binding: 2,
-                        resource: { buffer: viewOffsetStorage },
+                        resource: { buffer: offsetCellsStorage },
                     },
                     {
                         binding: 3,
@@ -476,11 +480,11 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                     },
                     {
                         binding: 1,
-                        resource: { buffer: viewScaleStorage },
+                        resource: { buffer: pixelsPerCellStorage },
                     },
                     {
                         binding: 2,
-                        resource: { buffer: viewOffsetStorage },
+                        resource: { buffer: offsetCellsStorage },
                     },
                     {
                         binding: 3,
@@ -541,16 +545,16 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             device,
             gridSizeArray,
             gridSizeBuffer,
+            offsetCellsArray,
+            offsetCellsStorage,
+            pixelsPerCellArray,
+            pixelsPerCellStorage,
             step: 0,
             simulationParamsArray,
             simulationParamsStorage,
             simulationPipeline,
             vertexBuffer,
             vertices,
-            viewOffsetArray,
-            viewOffsetStorage,
-            viewScaleArray,
-            viewScaleStorage,
             workgroupSize,
         };
     });
@@ -636,19 +640,12 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
     createEffect(() => {
         const data = gpuData();
-        const fact = showGrid() && scale() >= gridScaleLimit ? 1 - 2 / scale() : 1;
+        const showGridValue = showGrid() && pixelsPerCell() >= gridScaleLimit ? 1.0 : 0.0;
 
         if (data === undefined || typeof data === 'string') return;
 
-        for (let i = 0; i < data.vertices.length; i++) {
-            // Shrink left and bottom borders.
-
-            if (Math.sign(data.vertices[i]) < 0) {
-                data.vertices[i] = Math.sign(data.vertices[i]) * fact;
-            }
-        }
-
-        data.device.queue.writeBuffer(data.vertexBuffer, 0, data.vertices);
+        data.simulationParamsArray[2] = showGridValue;
+        data.device.queue.writeBuffer(data.simulationParamsStorage, 0, data.simulationParamsArray);
     });
 
     // Pass gradient to GPU pipeline.
@@ -690,16 +687,22 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         if (data === undefined || typeof data === 'string') return;
 
         const untrackedGridSize = untrack(gridSize);
-        const untrackedScale = untrack(scale);
+        const untrackedPixelsPerCell = untrack(pixelsPerCell);
         const encoder = data.device.createCommandEncoder();
 
-        data.viewOffsetArray[0] = modulo(mouseOffsetX + mouseDragX, untrackedGridSize.width);
-        data.viewOffsetArray[1] = -modulo(mouseOffsetY + mouseDragY, untrackedGridSize.height);
-        data.device.queue.writeBuffer(data.viewOffsetStorage, 0, data.viewOffsetArray);
+        data.offsetCellsArray[0] = modulo(
+            offsetCellsX + mouseDragX / untrackedPixelsPerCell,
+            untrackedGridSize.width
+        );
+        data.offsetCellsArray[1] = modulo(
+            offsetCellsY + mouseDragY / untrackedPixelsPerCell,
+            untrackedGridSize.height
+        );
+        data.device.queue.writeBuffer(data.offsetCellsStorage, 0, data.offsetCellsArray);
 
-        data.viewScaleArray[0] = (untrackedScale * untrackedGridSize.width) / canvasSize().width;
-        data.viewScaleArray[1] = (untrackedScale * untrackedGridSize.height) / canvasSize().height;
-        data.device.queue.writeBuffer(data.viewScaleStorage, 0, data.viewScaleArray);
+        data.pixelsPerCellArray[0] = untrackedPixelsPerCell;
+        data.pixelsPerCellArray[1] = untrackedPixelsPerCell;
+        data.device.queue.writeBuffer(data.pixelsPerCellStorage, 0, data.pixelsPerCellArray);
 
         if (doCompute) {
             let numComputes = untrack(computesPerFrame);
@@ -732,7 +735,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         pass.setVertexBuffer(0, data.vertexBuffer);
         pass.setBindGroup(0, data.bindGroups[data.step % 2]);
         // 2D points, so 2 points per vertex; draw a grid full of instances
-        pass.draw(data.vertices.length >> 1, untrackedGridSize.width * untrackedGridSize.height);
+        pass.draw(data.vertices.length >> 1, 1);
 
         pass.end();
         data.device.queue.submit([encoder.finish()]);
@@ -745,15 +748,13 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     };
 
     const onMouseMove = (event: MouseEvent) => {
-        const untrackedScale = untrack(scale);
-
         if (mouseDragging) {
             if (useFullResolution) {
-                mouseDragX = (window.devicePixelRatio * (event.clientX - mouseStartX)) / untrackedScale;
-                mouseDragY = (window.devicePixelRatio * (event.clientY - mouseStartY)) / untrackedScale;
+                mouseDragX = window.devicePixelRatio * (event.clientX - mouseStartX);
+                mouseDragY = window.devicePixelRatio * (event.clientY - mouseStartY);
             } else {
-                mouseDragX = (event.clientX - mouseStartX) / untrackedScale;
-                mouseDragY = (event.clientY - mouseStartY) / untrackedScale;
+                mouseDragX = event.clientX - mouseStartX;
+                mouseDragY = event.clientY - mouseStartY;
             }
         }
 
@@ -768,9 +769,18 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
     const onMouseUp = (event: MouseEvent) => {
         if (mouseDragging) {
+            const untrackedPixelsPerCell = untrack(pixelsPerCell);
             const untrackedGridSize = untrack(gridSize);
-            mouseOffsetX = modulo(mouseOffsetX + mouseDragX, untrackedGridSize.width);
-            mouseOffsetY = modulo(mouseOffsetY + mouseDragY, untrackedGridSize.height);
+
+            offsetCellsX = modulo(
+                offsetCellsX + mouseDragX / untrackedPixelsPerCell,
+                untrackedGridSize.width
+            );
+            offsetCellsY = modulo(
+                offsetCellsY + mouseDragY / untrackedPixelsPerCell,
+                untrackedGridSize.height
+            );
+
             mouseDragX = 0;
             mouseDragY = 0;
             mouseDragging = false;
@@ -778,19 +788,38 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     };
 
     const onWheel = (event: WheelEvent) => {
-        const untrackedScale = untrack(scale);
+        const untrackedGridSize = untrack(gridSize);
+        const untrackedPixelsPerCell = untrack(pixelsPerCell);
         const invert = untrack(zoomIsInverted) ? 1 : -1;
         const direction = Math.sign(event.deltaY);
-        const newScale = Math.min(Math.max(untrackedScale + invert * direction, 1), 20);
-        if (newScale === untrackedScale) return;
+        const newPixelsPerCell = Math.min(
+            Math.max(untrackedPixelsPerCell + invert * direction, 1),
+            20
+        );
 
-        const { width, height } = untrack(canvasSize);
-        const dragX = ((1 - newScale / untrackedScale) * (mouseClientX - 0.5 * width)) / newScale;
-        const dragY = ((1 - newScale / untrackedScale) * (mouseClientY - 0.5 * height)) / newScale;
-        const untrackedGridSize = untrack(gridSize);
-        mouseOffsetX = modulo(mouseOffsetX + dragX, untrackedGridSize.width);
-        mouseOffsetY = modulo(mouseOffsetY + dragY, untrackedGridSize.height);
-        setScale(newScale);
+        if (newPixelsPerCell === untrackedPixelsPerCell) return;
+
+        const cellX =
+            modulo(
+                mouseClientX - 0.5 - offsetCellsX * untrackedPixelsPerCell,
+                untrackedPixelsPerCell * untrackedGridSize.width
+            ) / untrackedPixelsPerCell;
+        const cellY =
+            modulo(
+                mouseClientY - 0.5 - offsetCellsY * untrackedPixelsPerCell,
+                untrackedPixelsPerCell * untrackedGridSize.height
+            ) / untrackedPixelsPerCell;
+
+        offsetCellsX = modulo(
+            -cellX + (mouseClientX - 0.5) / newPixelsPerCell,
+            untrackedGridSize.width
+        );
+        offsetCellsY = modulo(
+            -cellY + (mouseClientY - 0.5) / newPixelsPerCell,
+            untrackedGridSize.height
+        );
+
+        setPixelsPerCell(newPixelsPerCell);
         event.preventDefault();
     };
 
