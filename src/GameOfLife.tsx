@@ -60,7 +60,6 @@ function modulo(x: number, n: number): number {
 }
 
 const maxAge = 100;
-const foo = 0.6;
 
 export const GameOfLife: Component<GameOfLifeProps> = props => {
     const [, rest] = splitProps(props, ['foo']);
@@ -68,6 +67,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         detectedFrameRate,
         framesPerCompute,
         gridSize,
+        initialDensity,
         paused,
         resetListen,
         pixelsPerCell,
@@ -371,7 +371,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             }),
         ];
         for (let i = 0; i < cellStateArray.length; i++) {
-            cellStateArray[i] = Math.random() > foo ? 1 : 0;
+            cellStateArray[i] = Math.random() < untrack(initialDensity) ? 1 : 0;
         }
         device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray);
 
@@ -673,7 +673,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         data.step = 0;
 
         for (let i = 0; i < data.cellStateArray.length; i++) {
-            data.cellStateArray[i] = Math.random() > foo ? 1 : 0;
+            data.cellStateArray[i] = Math.random() < untrack(initialDensity) ? 1 : 0;
         }
 
         data.device.queue.writeBuffer(data.cellStateStorage[0], 0, data.cellStateArray);

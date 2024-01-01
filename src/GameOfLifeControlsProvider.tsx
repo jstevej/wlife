@@ -18,6 +18,7 @@ function useGameOfLifeControlsProvider() {
     const [framesPerCompute, setFramesPerCompute] = createSignal(60);
     const [gradientName, setGradientName] = createSignal<GradientName>('agSunset');
     const [gridSize, setGridSize] = createSignal<Dimensions>({ height: 0, width: 0 });
+    const [initialDensity, setInitialDensity] = createSignal(0.6);
     const { listen: resetListen, emit: resetEmit } = createEventBus<void>(); // clear not used
     const [paused, setPaused] = createSignal(false);
     const [pixelsPerCell, setPixelsPerCell] = createSignal(1);
@@ -35,6 +36,7 @@ function useGameOfLifeControlsProvider() {
         framesPerCompute,
         gradientName,
         gridSize,
+        initialDensity,
         paused,
         pixelsPerCell,
         resetEmit,
@@ -47,6 +49,7 @@ function useGameOfLifeControlsProvider() {
         setFramesPerCompute,
         setGradientName,
         setGridSize,
+        setInitialDensity,
         setPaused,
         setPixelsPerCell,
         setShowAxes,

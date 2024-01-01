@@ -108,11 +108,13 @@ export const Controls: Component = () => {
         framesPerCompute,
         gradientName,
         gridSize,
+        initialDensity,
         paused,
         pixelsPerCell,
         resetEmit,
         setGradientName,
         setFramesPerCompute,
+        setInitialDensity,
         setPaused,
         setShowAxes,
         setShowBackgroundAge,
@@ -188,6 +190,27 @@ export const Controls: Component = () => {
         return index >= 0 ? index : 0;
     };
 
+    const densities = [0.0125, 0.025, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+
+    const indexToDensity = (index: number): number => {
+        return densities[Math.min(Math.max(index, 0), densities.length - 1)];
+    };
+
+    const densityToIndex = (density: number): number => {
+        let bestError = Number.MAX_VALUE;
+        let bestIndex = 0;
+
+        for (let i = 0; i < densities.length; i++) {
+            const error = Math.abs(density - densities[i]);
+            if (error < bestError) {
+                bestError = error;
+                bestIndex = i;
+            }
+        }
+
+        return bestIndex;
+    };
+
     return (
         <div class="flex flex-col mx-2 divide-y divide-solid">
             <h1>Controls</h1>
@@ -247,6 +270,16 @@ export const Controls: Component = () => {
                     <button onClick={() => resetEmit()}>Restart</button>
                 </div>
             </div>
+            <Slider
+                title="Initial Density"
+                displayValue={initialDensity()
+                    .toFixed(4)
+                    .replace(/\.?0+$/, '')}
+                min={0}
+                max={densities.length}
+                onInput={value => setInitialDensity(indexToDensity(value))}
+                value={densityToIndex(initialDensity())}
+            />
             <div class="mt-1">
                 <div class="flex flex-row">
                     <div class="flex-1">Age:</div>
