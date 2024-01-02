@@ -26,18 +26,32 @@ export class History {
     }
 }
 
-export class SimulationResults {
-    public pctAlive = new History();
-    public pctStable = new History();
+export interface ReadOnlyHistory {
+    readonly max: number | undefined;
+    readonly min: number | undefined;
+    readonly values: Array<number | undefined>;
+}
 
-    public add(pctAlive: number, pctStable: number) {
-        this.pctAlive.add(pctAlive);
-        this.pctStable.add(pctStable);
+export class SimulationResults {
+    public _pctAlive = new History();
+    public _pctElders = new History();
+
+    public get pctAlive(): ReadOnlyHistory {
+        return this._pctAlive;
+    }
+
+    public get pctElders(): ReadOnlyHistory {
+        return this._pctElders;
+    }
+
+    public add(pctAlive: number, pctElders: number) {
+        this._pctAlive.add(pctAlive);
+        this._pctElders.add(pctElders);
     }
 
     public reset() {
-        this.pctAlive.reset();
-        this.pctStable.reset();
+        this._pctAlive.reset();
+        this._pctElders.reset();
     }
 }
 

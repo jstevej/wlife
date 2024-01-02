@@ -7,7 +7,9 @@ export type Dimensions = {
     width: number;
 };
 
-export const gridScaleLimit = 3;
+export const useFullResolution = true; // whether or not to scale by devicePixelRatio
+export const gridScaleLimit = useFullResolution ? 5 : 4;
+export const maxAge = 100;
 
 function useGameOfLifeControlsProvider() {
     const [actualComputeFrameRate, setActualComputeFrameRate] = createSignal(1);

@@ -314,7 +314,7 @@ export const Controls: Component = () => {
                     <div>{`${pixelsPerCell()} px/cell`}</div>
                 </div>
             </div>
-            <SimulationResultsChart />
+            <SimulationResultsChart class="pt-1" />
             <div class="flex-1"></div>
             <div class="flex flex-row justify-center">
                 <div class="my-2 text-blue-500">

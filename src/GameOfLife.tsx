@@ -12,12 +12,15 @@ import {
     untrack,
 } from 'solid-js';
 import cellShaderCode from './CellShader.wgsl?raw';
-import { gridScaleLimit, useGameOfLifeControls } from './GameOfLifeControlsProvider';
+import {
+    gridScaleLimit,
+    maxAge,
+    useFullResolution,
+    useGameOfLifeControls,
+} from './GameOfLifeControlsProvider';
 import { getGradientValues } from './Gradients';
 import { simulationResults } from './SimulationResults';
 import simulationShaderCode from './SimulationShader.wgsl?raw';
-
-const useFullResolution = true;
 
 export type GameOfLifeProps = {
     foo?: string;
@@ -63,8 +66,6 @@ type GpuData = {
 function modulo(x: number, n: number): number {
     return x - n * Math.floor(x / n);
 }
-
-const maxAge = 100;
 
 export const GameOfLife: Component<GameOfLifeProps> = props => {
     const [, rest] = splitProps(props, ['foo']);
@@ -369,7 +370,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         device.queue.writeBuffer(
             cellGradientStorage,
             0,
-            getGradientValues(untrack(gradientName), maxAge)
+            getGradientValues(untrack(gradientName))
         );
 
         // group 0, location 5: simulationResults
@@ -417,6 +418,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             cellStateArray[i] = Math.random() < untrack(initialDensity) ? 1 : -maxAge;
         }
         device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray);
+        simulationResults.reset();
+        simulationResults.add(100 * untrack(initialDensity), 0);
 
         // Shader stuff.
 
@@ -719,7 +722,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         data.device.queue.writeBuffer(
             data.cellGradientStorage,
             0,
-            getGradientValues(gradientNameValue, maxAge)
+            getGradientValues(gradientNameValue)
         );
     });
 
@@ -739,6 +742,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         data.device.queue.writeBuffer(data.cellStateStorage[0], 0, data.cellStateArray);
         simulationResults.reset();
+        simulationResults.add(100 * untrack(initialDensity), 0);
     });
 
     // Run render and compute pipelines.
@@ -824,8 +828,8 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                     const results = new Int32Array(resultsReadBuffer.getMappedRange());
                     const pctAlive =
                         (100 * results[0]) / (untrackedGridSize.width * untrackedGridSize.height);
-                    const pctStable = (100 * results[1]) / results[0];
-                    simulationResults.add(pctAlive, pctStable);
+                    const pctElders = (100 * results[1]) / results[0];
+                    simulationResults.add(pctAlive, pctElders);
                     resultsReadBuffer.unmap();
                 });
             }

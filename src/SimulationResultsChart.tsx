@@ -1,4 +1,6 @@
 import { Component, createEffect, createSignal, For, JSX, onCleanup, splitProps } from 'solid-js';
+import { useGameOfLifeControls } from './GameOfLifeControlsProvider';
+import { getGradientStyle } from './Gradients';
 import { simulationResults } from './SimulationResults';
 
 export const defaultRefreshIntervalMs = 1000;
@@ -177,8 +179,11 @@ export type SimulationResultsChartProps = {
 
 export const SimulationResultsChart: Component<SimulationResultsChartProps> = props => {
     const [, rest] = splitProps(props, ['refreshIntervalMs']);
+    const { gradientName } = useGameOfLifeControls();
     const [data, setData] = createSignal<Array<ChartData>>([]);
-    const refreshInterval = setInterval(() => {
+    let pctAliveStyle = 'rgb(0, 1, 0)';
+    let pctEldersStyle = 'rgb(0, 0, 1)';
+    const updateData = () => {
         setData([
             {
                 axis: 0,
@@ -186,23 +191,32 @@ export const SimulationResultsChart: Component<SimulationResultsChartProps> = pr
                 label: 'Alive',
                 max: simulationResults.pctAlive.max,
                 min: 0,
-                style: 'rgb(0, 255, 0)',
+                style: pctAliveStyle,
                 units: '%',
             },
             {
                 axis: 1,
-                data: simulationResults.pctStable.values,
-                label: 'Stable',
-                max: simulationResults.pctStable.max,
+                data: simulationResults.pctElders.values,
+                label: 'Elders',
+                max: simulationResults.pctElders.max,
                 min: 0,
-                style: 'rgb(0, 0, 255)',
+                style: pctEldersStyle,
                 units: '%',
             },
         ]);
-    }, props.refreshIntervalMs ?? 1000);
+    };
+    let refreshInterval: ReturnType<typeof setInterval> | undefined;
+
+    createEffect(() => {
+        const gradientNameValue = gradientName();
+        pctAliveStyle = getGradientStyle(gradientNameValue, 0);
+        pctEldersStyle = getGradientStyle(gradientNameValue, 0.5);
+        if (refreshInterval !== undefined) clearInterval(refreshInterval);
+        refreshInterval = setInterval(() => updateData(), props.refreshIntervalMs ?? 500);
+    });
 
     onCleanup(() => {
-        clearInterval(refreshInterval);
+        if (refreshInterval !== undefined) clearInterval(refreshInterval);
     });
 
     return <Chart backgroundStyle="rgb(0, 0, 0)" data={data()} {...rest} />;

@@ -1,4 +1,6 @@
+import { maxAge } from './GameOfLifeControlsProvider';
 import { assertUnhandled } from './Sutl';
+
 export const gradientNames = [
     'agSunset',
     'agSunsetRev',
@@ -244,7 +246,25 @@ export function getGradientStops(gradientName: GradientName): Array<string> {
     }
 }
 
-export function getGradientValues(gradientName: GradientName, maxAge: number): Float32Array {
+export function getGradientStyle(gradientName: GradientName, pos: number): string {
+    const values = getGradientValues(gradientName);
+
+    if (pos < 0) {
+        console.error(`pos (${pos}) < 0`);
+        pos = 0;
+    }
+
+    if (pos > 1) {
+        console.error(`pos (${pos}) > 1`);
+        pos = 1;
+    }
+
+    const age = pos * maxAge;
+    const rgb = [0, 1, 2].map(i => (255 * values[3 * age + i]).toFixed(0)).join(', ');
+    return `rgb(${rgb})`;
+}
+
+export function getGradientValues(gradientName: GradientName): Float32Array {
     let values = gradientValues[gradientName];
 
     if (values === undefined) {
