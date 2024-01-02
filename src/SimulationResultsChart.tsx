@@ -164,6 +164,7 @@ export const Chart: Component<ChartProps> = allProps => {
             <For each={props.data}>
                 {series => (
                     <div class="flex flex-row">
+                        <div class="h-0.5 w-5 mr-1 self-center" style={{ background: series.style }}></div>
                         <div class="flex-1">{`${series.label}:`}</div>
                         <div>{getSeriesValue(series)}</div>
                     </div>

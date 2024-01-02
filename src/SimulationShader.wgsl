@@ -1,6 +1,6 @@
 struct SimResults {
     numAlive: atomic<i32>,
-    numStable: atomic<i32>,
+    numElders: atomic<i32>,
 };
 
 const maxAge = 100i;
@@ -59,7 +59,7 @@ fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
         atomicAdd(&simResults.numAlive, 1);
 
         if (age >= maxAge) {
-            atomicAdd(&simResults.numStable, 1);
+            atomicAdd(&simResults.numElders, 1);
         }
     }
 }
