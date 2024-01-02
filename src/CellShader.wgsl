@@ -22,7 +22,7 @@ const minAge = -100i;
 @group(0) @binding(2) var<storage> offsetCells: vec2f;
 @group(0) @binding(3) var<storage> simParams: SimParams;
 @group(0) @binding(4) var<storage> cellGradient: array<f32>;
-@group(0) @binding(5) var<storage> cellState: array<i32>;
+@group(0) @binding(6) var<storage> cellState: array<i32>;
 
 // WGSL's modulo implementation uses truncated division, which usually is not what we want for
 // negative numbers. This implementation is for floored division, which is what we want.

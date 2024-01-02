@@ -2,6 +2,7 @@ import { Component, createEffect, createMemo, For, JSX, untrack } from 'solid-js
 import PanZoomIcon from './assets/pan-zoom.svg';
 import { gridScaleLimit, useGameOfLifeControls } from './GameOfLifeControlsProvider';
 import { getGradientName, getGradientStops, gradientNames, isGradientName } from './Gradients';
+import { SimulationResultsChart } from './SimulationResultsChart';
 
 type CheckboxProps = {
     disabled?: boolean;
@@ -190,7 +191,10 @@ export const Controls: Component = () => {
         return index >= 0 ? index : 0;
     };
 
-    const densities = [0.0125, 0.025, 0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+    const densities = [
+        0.01, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08, 0.09, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7,
+        0.8, 0.9, 1.0,
+    ];
 
     const indexToDensity = (index: number): number => {
         return densities[Math.min(Math.max(index, 0), densities.length - 1)];
@@ -270,16 +274,16 @@ export const Controls: Component = () => {
                     <button onClick={() => resetEmit()}>Restart</button>
                 </div>
             </div>
-            <Slider
-                title="Initial Density"
-                displayValue={initialDensity()
-                    .toFixed(4)
-                    .replace(/\.?0+$/, '')}
-                min={0}
-                max={densities.length}
-                onInput={value => setInitialDensity(indexToDensity(value))}
-                value={densityToIndex(initialDensity())}
-            />
+            <div class="mt-1">
+                <Slider
+                    title="Initial Density"
+                    displayValue={`${(100 * initialDensity()).toFixed(2).replace(/\.?0+$/, '')}%`}
+                    min={0}
+                    max={densities.length - 1}
+                    onInput={value => setInitialDensity(indexToDensity(value))}
+                    value={densityToIndex(initialDensity())}
+                />
+            </div>
             <div class="mt-1">
                 <div class="flex flex-row">
                     <div class="flex-1">Age:</div>
@@ -310,6 +314,7 @@ export const Controls: Component = () => {
                     <div>{`${pixelsPerCell()} px/cell`}</div>
                 </div>
             </div>
+            <SimulationResultsChart />
             <div class="flex-1"></div>
             <div class="flex flex-row justify-center">
                 <div class="my-2 text-blue-500">

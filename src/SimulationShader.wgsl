@@ -1,6 +1,14 @@
+struct SimResults {
+    numAlive: atomic<i32>,
+    numStable: atomic<i32>,
+};
+
+const maxAge = 100i;
+
 @group(0) @binding(0) var<uniform> gridSize: vec2f;
-@group(0) @binding(5) var<storage> cellStateIn: array<i32>;
-@group(0) @binding(6) var<storage, read_write> cellStateOut: array<i32>;
+@group(0) @binding(5) var<storage, read_write> simResults: SimResults;
+@group(0) @binding(6) var<storage> cellStateIn: array<i32>;
+@group(0) @binding(7) var<storage, read_write> cellStateOut: array<i32>;
 
 fn cellIndex(x: u32, y: u32) -> u32 {
     return y * u32(gridSize.x) + x;
@@ -44,5 +52,14 @@ fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
     let i = cellIndex(cell.x, cell.y);
     let value = i32((rules[numNeighbors] >> isCellAlive(i)) & 0x01);
     let prev = cellStateIn[i];
-    cellStateOut[i] = i32(prev >= 0) * prev * value + value + i32(prev <= 0) * (1 - value) * (prev - 1);
+    let age = i32(prev >= 0) * prev * value + value + i32(prev <= 0) * (1 - value) * (prev - 1);
+    cellStateOut[i] = age;
+
+    if (age > 0) {
+        atomicAdd(&simResults.numAlive, 1);
+
+        if (age >= maxAge) {
+            atomicAdd(&simResults.numStable, 1);
+        }
+    }
 }
