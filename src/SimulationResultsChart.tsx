@@ -151,7 +151,7 @@ export const Chart: Component<ChartProps> = allProps => {
     });
 
     const getSeriesValue = (series: ChartData): string => {
-        const value = series.data[series.data.length - 1]?.toFixed(1) ?? '';
+        const value = series.data[series.data.length - 1]?.toPrecision(2) ?? '';
         if (value === undefined) return '';
         const units = series.units ? ` ${series.units}` : '';
         return value + units;
