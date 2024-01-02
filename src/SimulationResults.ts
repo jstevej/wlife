@@ -1,8 +1,11 @@
-export const histLength = 20_000;
+export const histLength = 2048; // must be power of two
 
 export class History {
+    private decimationCount = 0;
+    private decimationFactor = 1;
     public max: number | undefined;
     public min: number | undefined;
+    private size = 0;
     public values: Array<number | undefined>;
 
     constructor() {
@@ -10,12 +13,36 @@ export class History {
     }
 
     public add(value: number) {
-        this.values.shift();
-        this.values.push(value);
+        let addValue = true;
 
-        if (value !== undefined && !Number.isNaN(value)) {
-            if (this.max === undefined || value > this.max) this.max = value;
-            if (this.min === undefined || value < this.min) this.min = value;
+        if (this.decimationFactor > 1) {
+            if (this.decimationCount++ !== 0) addValue = false;
+            if (this.decimationCount >= this.decimationFactor) this.decimationCount = 0;
+        }
+
+        if (addValue) {
+            this.values.shift();
+            this.values.push(value);
+            this.size++;
+
+            if (value !== undefined && !Number.isNaN(value)) {
+                if (this.max === undefined || value > this.max) this.max = value;
+                if (this.min === undefined || value < this.min) this.min = value;
+            }
+
+            if (this.size >= histLength) {
+                for (let i = histLength - 1, j = histLength - 2; j >= 0; i -= 1, j -= 2) {
+                    this.values[i] = this.values[j];
+                }
+
+                for (let i = 0; i < histLength >> 1; i++) {
+                    this.values[i] = undefined;
+                }
+
+                this.size = histLength >> 1;
+                this.decimationFactor += 1;
+                this.decimationCount = 0;
+            }
         }
     }
 
