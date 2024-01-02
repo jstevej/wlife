@@ -93,7 +93,8 @@ export const Chart: Component<ChartProps> = allProps => {
             const startIndex = Math.max(series.data.length - numSamples, 0);
             const ai = axisInfo[series.axis ?? 0];
             if (ai.max === undefined || ai.min === undefined) continue;
-            const yScale = height / (ai.min - ai.max);
+            const yMargin = 2;
+            const yScale = (height - 2 * yMargin) / (ai.min - ai.max);
             let firstPoint = true;
 
             ctx.strokeStyle = series.style;
@@ -103,7 +104,7 @@ export const Chart: Component<ChartProps> = allProps => {
                 const value = series.data[i];
 
                 if (value !== undefined && !Number.isNaN(value)) {
-                    const y = yScale * (value - ai.max);
+                    const y = yScale * (value - ai.max) + yMargin;
                     const x = xScale * (i - startIndex);
 
                     if (firstPoint) {
@@ -164,7 +165,10 @@ export const Chart: Component<ChartProps> = allProps => {
             <For each={props.data}>
                 {series => (
                     <div class="flex flex-row">
-                        <div class="h-0.5 w-5 mr-1 self-center" style={{ background: series.style }}></div>
+                        <div
+                            class="h-0.5 w-5 mr-1 self-center"
+                            style={{ background: series.style }}
+                        ></div>
                         <div class="flex-1">{`${series.label}:`}</div>
                         <div>{getSeriesValue(series)}</div>
                     </div>
@@ -190,7 +194,7 @@ export const SimulationResultsChart: Component<SimulationResultsChartProps> = pr
                 axis: 0,
                 data: simulationResults.pctAlive.values,
                 label: 'Alive',
-                max: simulationResults.pctAlive.max,
+                max: Math.max(simulationResults.pctAlive.max ?? 1, 1),
                 min: 0,
                 style: pctAliveStyle,
                 units: '%',
@@ -199,7 +203,7 @@ export const SimulationResultsChart: Component<SimulationResultsChartProps> = pr
                 axis: 1,
                 data: simulationResults.pctElders.values,
                 label: 'Elders',
-                max: simulationResults.pctElders.max,
+                max: Math.max(simulationResults.pctElders.max ?? 1, 1),
                 min: 0,
                 style: pctEldersStyle,
                 units: '%',
