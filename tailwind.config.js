@@ -54,6 +54,7 @@ module.exports = {
             colors: {
                 bg: colors.gray['800'],
                 bghi: colors.gray['700'],
+                error: colors.red['500'],
             },
             fontFamily: {
                 sans: ['Inter var', ...defaultTheme.fontFamily.sans],

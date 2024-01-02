@@ -181,6 +181,27 @@ export const Controls: Component = () => {
         setFramesPerCompute(bestFramesPerCompute);
     });
 
+    let initialFrames = 3;
+    let missingFramesCount = 0;
+
+    const isMissingFrames = () => {
+        const isMissed = actualRenderFrameRate() - detectedFrameRate() < -0.1;
+
+        if (initialFrames-- > 0) return false;
+
+        if (isMissed) {
+            if (missingFramesCount < 3) {
+                missingFramesCount++;
+            }
+        } else {
+            if (missingFramesCount > 0) {
+                missingFramesCount--;
+            }
+        }
+
+        return missingFramesCount >= 3;
+    };
+
     const onSpeedSliderChanged = (value: number) => {
         setFramesPerCompute(untrack(framesPerComputeValues)[value]);
     };
@@ -294,11 +315,15 @@ export const Controls: Component = () => {
             <div class="mt-1">
                 <div class="flex flex-row">
                     <div class="flex-1">Render:</div>
-                    <div>{`${actualRenderFrameRate().toFixed(1)} fps`}</div>
+                    <div
+                        class={isMissingFrames() ? 'text-error' : ''}
+                    >{`${actualRenderFrameRate().toFixed(1)} fps`}</div>
                 </div>
                 <div class="flex flex-row">
                     <div class="flex-1">Compute:</div>
-                    <div>{`${actualComputeFrameRate().toFixed(1)} fps`}</div>
+                    <div
+                        class={isMissingFrames() ? 'text-error' : ''}
+                    >{`${actualComputeFrameRate().toFixed(1)} fps`}</div>
                 </div>
             </div>
             <div class="mt-1">
