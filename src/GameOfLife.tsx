@@ -21,6 +21,7 @@ import {
 import { getGradientValues } from './Gradients';
 import { simulationResults } from './SimulationResults';
 import simulationShaderCode from './SimulationShader.wgsl?raw';
+import { replaceConst, replaceWorkgroupSize, wgslReplace } from './WgslReplace';
 
 export type GameOfLifeProps = {
     foo?: string;
@@ -367,11 +368,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             size: 3 * (maxAge + 1) * 4,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         });
-        device.queue.writeBuffer(
-            cellGradientStorage,
-            0,
-            getGradientValues(untrack(gradientName))
-        );
+        device.queue.writeBuffer(cellGradientStorage, 0, getGradientValues(untrack(gradientName)));
 
         // group 0, location 5: simulationResults
 
@@ -425,14 +422,20 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         const cellShaderModule = device.createShaderModule({
             label: 'cell shader',
-            code: cellShaderCode,
+            code: wgslReplace(cellShaderCode, [
+                replaceConst('maxAge', `${maxAge}i`),
+                replaceConst('minAge', `-${maxAge}i`),
+            ]),
         });
 
         const workgroupSize = 8;
 
         const simulationShaderModule = device.createShaderModule({
             label: 'game of life simulation shader',
-            code: simulationShaderCode,
+            code: wgslReplace(simulationShaderCode, [
+                replaceConst('maxAge', `${maxAge}i`),
+                replaceWorkgroupSize('computeMain', 8, 8),
+            ]),
         });
 
         // Pipeline.

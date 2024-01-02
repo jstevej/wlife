@@ -3,7 +3,7 @@ struct SimResults {
     numElders: atomic<i32>,
 };
 
-const maxAge = 100i;
+const maxAge = 0i; // {{{_auto-replace_}}}
 
 @group(0) @binding(0) var<uniform> gridSize: vec2f;
 @group(0) @binding(5) var<storage, read_write> simResults: SimResults;
@@ -33,7 +33,7 @@ fn modulo(x: i32, n: u32) -> u32 {
 }
 
 @compute
-@workgroup_size(8, 8)
+@workgroup_size(0, 0) // {{{_auto-replace_ computeMain}}}
 fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
     let left = modulo(i32(cell.x) - 1, u32(gridSize.x));
     let right = modulo(i32(cell.x) + 1, u32(gridSize.x));

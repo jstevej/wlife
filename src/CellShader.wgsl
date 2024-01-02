@@ -14,8 +14,8 @@ struct SimParams {
     showGrid: f32,
 };
 
-const maxAge = 100i;
-const minAge = -100i;
+const maxAge = 0i; // {{{_auto-replace_}}}
+const minAge = 0i; // {{{_auto-replace_}}}
 
 @group(0) @binding(0) var<uniform> gridSize: vec2f;
 @group(0) @binding(1) var<storage> pixelsPerCell: vec2f;
