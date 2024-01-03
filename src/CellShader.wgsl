@@ -17,12 +17,12 @@ struct SimParams {
 const maxAge = 0i; // {{{_auto-replace_}}}
 const minAge = 0i; // {{{_auto-replace_}}}
 
-@group(0) @binding(0) var<uniform> gridSize: vec2f;
-@group(0) @binding(1) var<storage> pixelsPerCell: vec2f;
-@group(0) @binding(2) var<storage> offsetCells: vec2f;
-@group(0) @binding(3) var<storage> simParams: SimParams;
-@group(0) @binding(4) var<storage> cellGradient: array<f32>;
-@group(0) @binding(6) var<storage> cellState: array<i32>;
+@group(0) @binding(0) var<storage> cellState: array<i32>;
+@group(0) @binding(2) var<uniform> gridSize: vec2f;
+@group(0) @binding(3) var<storage> pixelsPerCell: vec2f;
+@group(0) @binding(4) var<storage> offsetCells: vec2f;
+@group(0) @binding(5) var<storage> simParams: SimParams;
+@group(0) @binding(6) var<storage> cellGradient: array<f32>;
 
 // WGSL's modulo implementation uses truncated division, which usually is not what we want for
 // negative numbers. This implementation is for floored division, which is what we want.

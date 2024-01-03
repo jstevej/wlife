@@ -69,6 +69,8 @@ function modulo(x: number, n: number): number {
 }
 
 export const GameOfLife: Component<GameOfLifeProps> = props => {
+    console.log(`starting`);
+
     const [, rest] = splitProps(props, ['foo']);
     const {
         detectedFrameRate,
@@ -82,6 +84,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         setActualRenderFrameRate,
         setAge,
         setCanvasSize,
+        setDetectedFrameRate,
         setGridSize,
         setPixelsPerCell,
         showAxes,
@@ -260,10 +263,9 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         console.log(`detecting frame rate...`);
 
         const frameTimesMs: Array<number> = [];
-        const detectionStart = performance.now();
         let prevFrameTimestamp = 0;
 
-        while (performance.now() - detectionStart < 100) {
+        for (let i = 0; i < 10; i++) {
             await new Promise<void>(resolve => {
                 requestAnimationFrame(frameTimestamp => {
                     if (prevFrameTimestamp !== 0) {
@@ -275,11 +277,20 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             });
         }
 
-        const measuredFrameRate = 1000 / frameTimesMs[frameTimesMs.length >> 1];
-        const detectedFrameRate = Math.round(measuredFrameRate);
+        const minimumFrameRate = 1000 / frameTimesMs[frameTimesMs.length - 1];
+        const medianFrameRate = 1000 / frameTimesMs[frameTimesMs.length >> 1];
+        const detectedFrameRate = Math.round(minimumFrameRate);
 
-        console.log(`measured frame rate = ${measuredFrameRate.toFixed(3)} fps`);
+        console.log(`minimum measured frame rate = ${minimumFrameRate.toFixed(3)} fps`);
+        console.log(`median measured frame rate = ${medianFrameRate.toFixed(3)} fps`);
         console.log(`detected frame rate = ${detectedFrameRate} fps`);
+
+        setDetectedFrameRate(detectedFrameRate);
+
+        // Reset simulation results with initial density.
+
+        simulationResults.reset();
+        simulationResults.add(100 * untrack(initialDensity), 0);
 
         // Setup canvas.
 
@@ -320,9 +331,30 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             ],
         };
 
-        // group 0, location 0: gridSize
+        // group 0, location 0: cellState input
+        // group 0, location 1: cellState output
 
         const untrackedGridSize = untrack(gridSize);
+        const cellStateArray = new Int32Array(untrackedGridSize.width * untrackedGridSize.height);
+        const cellStateStorage = [
+            device.createBuffer({
+                label: 'cell state ping',
+                size: cellStateArray.byteLength,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+            }),
+            device.createBuffer({
+                label: 'cell state pong',
+                size: cellStateArray.byteLength,
+                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+            }),
+        ];
+        for (let i = 0; i < cellStateArray.length; i++) {
+            cellStateArray[i] = Math.random() < untrack(initialDensity) ? 1 : -maxAge;
+        }
+        device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray);
+
+        // group 0, location 2: gridSize
+
         const gridSizeArray = new Float32Array([untrackedGridSize.width, untrackedGridSize.height]);
         const gridSizeBuffer = device.createBuffer({
             label: 'gridSize uniform',
@@ -331,7 +363,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         });
         device.queue.writeBuffer(gridSizeBuffer, 0, gridSizeArray);
 
-        // group 0, location 1: pixelsPerCell
+        // group 0, location 3: pixelsPerCell
 
         const pixelsPerCellArray = new Float32Array([4, 4]);
         const pixelsPerCellStorage = device.createBuffer({
@@ -341,7 +373,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         });
         device.queue.writeBuffer(pixelsPerCellStorage, 0, pixelsPerCellArray);
 
-        // group 0, location 2: offsetCells
+        // group 0, location 4: offsetCells
 
         const offsetCellsArray = new Float32Array([0, 0]);
         const offsetCellsStorage = device.createBuffer({
@@ -351,7 +383,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         });
         device.queue.writeBuffer(offsetCellsStorage, 0, offsetCellsArray);
 
-        // group 0, location 3: simulationParams
+        // group 0, location 5: simulationParams
 
         const simulationParamsArray = new Float32Array([0.0, 0.0, 0.0]);
         const simulationParamsStorage = device.createBuffer({
@@ -361,7 +393,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         });
         device.queue.writeBuffer(simulationParamsStorage, 0, simulationParamsArray);
 
-        // group 0, location 4: cellGradient
+        // group 0, location 6: cellGradient
 
         const cellGradientStorage = device.createBuffer({
             label: 'cellGradient storage',
@@ -370,7 +402,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         });
         device.queue.writeBuffer(cellGradientStorage, 0, getGradientValues(untrack(gradientName)));
 
-        // group 0, location 5: simulationResults
+        // group 0, location 7: simulationResults
 
         const simulationResultsArray = new Int32Array([0, 0]);
         const simulationResultsStorage = device.createBuffer({
@@ -394,29 +426,6 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                 })
             );
         }
-
-        // group 0, location 6: cellState input
-        // group 0, location 7: cellState output
-
-        const cellStateArray = new Int32Array(untrackedGridSize.width * untrackedGridSize.height);
-        const cellStateStorage = [
-            device.createBuffer({
-                label: 'cell state ping',
-                size: cellStateArray.byteLength,
-                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-            }),
-            device.createBuffer({
-                label: 'cell state pong',
-                size: cellStateArray.byteLength,
-                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-            }),
-        ];
-        for (let i = 0; i < cellStateArray.length; i++) {
-            cellStateArray[i] = Math.random() < untrack(initialDensity) ? 1 : -maxAge;
-        }
-        device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray);
-        simulationResults.reset();
-        simulationResults.add(100 * untrack(initialDensity), 0);
 
         // Shader stuff.
 
@@ -447,22 +456,22 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                     binding: 0,
                     visibility:
                         GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
-                    buffer: {}, // gridSize uniform buffer (default is 'uniform' so can leave empty)
+                    buffer: { type: 'read-only-storage' }, // cell state input buffer
                 },
                 {
                     binding: 1,
-                    visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-                    buffer: { type: 'read-only-storage' },
+                    visibility: GPUShaderStage.COMPUTE,
+                    buffer: { type: 'storage' }, // cell state output buffer
                 },
                 {
                     binding: 2,
-                    visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
-                    buffer: { type: 'read-only-storage' },
+                    visibility:
+                        GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                    buffer: {}, // gridSize uniform buffer (default is 'uniform' so can leave empty)
                 },
                 {
                     binding: 3,
-                    visibility:
-                        GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                    visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
                     buffer: { type: 'read-only-storage' },
                 },
                 {
@@ -472,101 +481,63 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                 },
                 {
                     binding: 5,
-                    visibility: GPUShaderStage.COMPUTE,
-                    buffer: { type: 'storage' }, // TODO: write-only-storage?
+                    visibility:
+                        GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                    buffer: { type: 'read-only-storage' },
                 },
                 {
                     binding: 6,
-                    visibility:
-                        GPUShaderStage.VERTEX | GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
-                    buffer: { type: 'read-only-storage' }, // cell state input buffer
+                    visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
+                    buffer: { type: 'read-only-storage' },
                 },
                 {
                     binding: 7,
                     visibility: GPUShaderStage.COMPUTE,
-                    buffer: { type: 'storage' }, // cell state output buffer
+                    buffer: { type: 'storage' }, // TODO: write-only-storage?
                 },
             ],
         });
 
-        const bindGroups = [
+        const bindGroups: Array<GPUBindGroup> = [0, 1].map(ping =>
             device.createBindGroup({
-                label: 'cell renderer bind group (ping)',
+                label: `cell renderer bind group ${ping}`,
                 layout: bindGroupLayout,
                 entries: [
                     {
                         binding: 0,
-                        resource: { buffer: gridSizeBuffer },
+                        resource: { buffer: cellStateStorage[ping] },
                     },
                     {
                         binding: 1,
-                        resource: { buffer: pixelsPerCellStorage },
+                        resource: { buffer: cellStateStorage[ping ? 0 : 1] },
                     },
                     {
                         binding: 2,
-                        resource: { buffer: offsetCellsStorage },
-                    },
-                    {
-                        binding: 3,
-                        resource: { buffer: simulationParamsStorage },
-                    },
-                    {
-                        binding: 4,
-                        resource: { buffer: cellGradientStorage },
-                    },
-                    {
-                        binding: 5,
-                        resource: { buffer: simulationResultsStorage },
-                    },
-                    {
-                        binding: 6,
-                        resource: { buffer: cellStateStorage[0] },
-                    },
-                    {
-                        binding: 7,
-                        resource: { buffer: cellStateStorage[1] },
-                    },
-                ],
-            }),
-            device.createBindGroup({
-                label: 'cell renderer bind group (pong)',
-                layout: bindGroupLayout,
-                entries: [
-                    {
-                        binding: 0,
                         resource: { buffer: gridSizeBuffer },
                     },
                     {
-                        binding: 1,
+                        binding: 3,
                         resource: { buffer: pixelsPerCellStorage },
                     },
                     {
-                        binding: 2,
+                        binding: 4,
                         resource: { buffer: offsetCellsStorage },
                     },
                     {
-                        binding: 3,
+                        binding: 5,
                         resource: { buffer: simulationParamsStorage },
                     },
                     {
-                        binding: 4,
+                        binding: 6,
                         resource: { buffer: cellGradientStorage },
                     },
                     {
-                        binding: 5,
+                        binding: 7,
                         resource: { buffer: simulationResultsStorage },
                     },
-                    {
-                        binding: 6,
-                        resource: { buffer: cellStateStorage[1] },
-                    },
-                    {
-                        binding: 7,
-                        resource: { buffer: cellStateStorage[0] },
-                    },
                 ],
-            }),
-        ];
+            })
+        );
 
         const pipelineLayout = device.createPipelineLayout({
             label: 'cell pipeline layout',
@@ -738,14 +709,6 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         data.computeStep = 0;
         data.renderStep = 0;
-
-        for (let i = 0; i < data.cellStateArray.length; i++) {
-            data.cellStateArray[i] = Math.random() < untrack(initialDensity) ? 1 : -maxAge;
-        }
-
-        data.device.queue.writeBuffer(data.cellStateStorage[0], 0, data.cellStateArray);
-        simulationResults.reset();
-        simulationResults.add(100 * untrack(initialDensity), 0);
     });
 
     // Run render and compute pipelines.
@@ -757,6 +720,17 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         const untrackedGridSize = untrack(gridSize);
         const untrackedPixelsPerCell = untrack(pixelsPerCell);
+
+        if (data.renderStep === 0) {
+            for (let i = 0; i < data.cellStateArray.length; i++) {
+                data.cellStateArray[i] = Math.random() < untrack(initialDensity) ? 1 : -maxAge;
+            }
+
+            data.device.queue.writeBuffer(data.cellStateStorage[0], 0, data.cellStateArray);
+
+            simulationResults.reset();
+            simulationResults.add(100 * untrack(initialDensity), 0);
+        }
 
         data.offsetCellsArray[0] = modulo(
             offsetCellsX + mouseDragX / untrackedPixelsPerCell,

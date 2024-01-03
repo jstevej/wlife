@@ -5,10 +5,10 @@ struct SimResults {
 
 const maxAge = 0i; // {{{_auto-replace_}}}
 
-@group(0) @binding(0) var<uniform> gridSize: vec2f;
-@group(0) @binding(5) var<storage, read_write> simResults: SimResults;
-@group(0) @binding(6) var<storage> cellStateIn: array<i32>;
-@group(0) @binding(7) var<storage, read_write> cellStateOut: array<i32>;
+@group(0) @binding(0) var<storage> cellStateIn: array<i32>;
+@group(0) @binding(1) var<storage, read_write> cellStateOut: array<i32>;
+@group(0) @binding(2) var<uniform> gridSize: vec2f;
+@group(0) @binding(7) var<storage, read_write> simResults: SimResults;
 
 fn cellIndex(x: u32, y: u32) -> u32 {
     return y * u32(gridSize.x) + x;
