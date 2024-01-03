@@ -184,7 +184,7 @@ export const Controls: Component = () => {
     let initialFrames = 3;
     let missingFramesCount = 0;
 
-    const isMissingFrames = () => {
+    const isMissingFrames = createMemo(() => {
         const isMissed = actualRenderFrameRate() - detectedFrameRate() < -0.1;
 
         if (initialFrames-- > 0) return false;
@@ -200,7 +200,7 @@ export const Controls: Component = () => {
         }
 
         return missingFramesCount >= 3;
-    };
+    });
 
     const onSpeedSliderChanged = (value: number) => {
         setFramesPerCompute(untrack(framesPerComputeValues)[value]);
