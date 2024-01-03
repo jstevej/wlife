@@ -287,11 +287,6 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         setDetectedFrameRate(detectedFrameRate);
 
-        // Reset simulation results with initial density.
-
-        simulationResults.reset();
-        simulationResults.add(100 * untrack(initialDensity), 0);
-
         // Setup canvas.
 
         if (!navigator.gpu) return `WebGPU not supported on this browser`;

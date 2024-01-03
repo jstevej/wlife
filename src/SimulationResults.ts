@@ -47,6 +47,8 @@ export class History {
     }
 
     public reset() {
+        this.decimationFactor = 1;
+        this.size = 0;
         this.max = undefined;
         this.min = undefined;
         this.values.fill(undefined);
