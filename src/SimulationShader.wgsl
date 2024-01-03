@@ -4,11 +4,17 @@ struct SimResults {
 };
 
 const maxAge = 0i; // {{{_auto-replace_}}}
+const minAge = 0i; // {{{_auto-replace_}}}
 
 @group(0) @binding(0) var<storage> cellStateIn: array<i32>;
 @group(0) @binding(1) var<storage, read_write> cellStateOut: array<i32>;
 @group(0) @binding(2) var<uniform> gridSize: vec2f;
 @group(0) @binding(7) var<storage, read_write> simResults: SimResults;
+//@group(0) @binding(8) var<storage, read_write> ageHistChunks: array<array<u32, maxAge>>;
+//@group(0) @binding(9) var<storage, read_write> backgroundAgeHistChunks: array<array<u32, -minAge + 1>>;
+
+//var<workgroup> ageHist: array<atomic<u32>, maxAge>;
+//var<workgroup> backgroundAgeHist: array<atomic<u32>, -minAge + 1>;
 
 fn cellIndex(x: u32, y: u32) -> u32 {
     return y * u32(gridSize.x) + x;
@@ -57,9 +63,21 @@ fn computeMain(@builtin(global_invocation_id) cell: vec3u) {
 
     if (age > 0) {
         atomicAdd(&simResults.numAlive, 1);
+        //atomicAdd(&ageHist[u32(age - 1)], 1); // index 0-99 <=> age 1-100
 
         if (age >= maxAge) {
             atomicAdd(&simResults.numElders, 1);
         }
+    //} else {
+    //    atomicAdd(&backgroundAgeHist[u32(-age)], 1); // index 0-100 <=> age 0-(-100)
     }
 }
+
+//@compute
+//@workgroup_size(0, 0) // {{{_auto-replace_ reduceHistChunks}}}
+//fn reduceHistChunks(
+//    @builtin(local_invocation_id) local_invocation_id: vec3u,
+//    @builtin(workgroup_id) workgroup_id: vec3u,
+//) {
+//
+//}

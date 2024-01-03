@@ -32,6 +32,11 @@ type Dimensions = {
     width: number;
 };
 
+type Vec2 = {
+    x: number;
+    y: number;
+};
+
 type GpuData = {
     bindGroups: Array<GPUBindGroup>;
     cellGradientStorage: GPUBuffer;
@@ -54,9 +59,9 @@ type GpuData = {
     simulationResultsArray: Int32Array;
     simulationResultsReadBuffers: Array<GPUBuffer>;
     simulationResultsStorage: GPUBuffer;
+    simulationWorkgroupSize: Vec2;
     vertexBuffer: GPUBuffer;
     vertices: Float32Array;
-    workgroupSize: number;
 };
 
 // Javascript's modulo implementation uses truncated division, which usually is not what we want for
@@ -432,13 +437,17 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             ]),
         });
 
-        const workgroupSize = 8;
-
+        const simulationWorkgroupSize = { x: 16, y: 16 };
         const simulationShaderModule = device.createShaderModule({
             label: 'game of life simulation shader',
             code: wgslReplace(simulationShaderCode, [
                 replaceConst('maxAge', `${maxAge}i`),
-                replaceWorkgroupSize('computeMain', 8, 8),
+                replaceConst('minAge', `-${maxAge}i`),
+                replaceWorkgroupSize(
+                    'computeMain',
+                    simulationWorkgroupSize.x,
+                    simulationWorkgroupSize.y
+                ),
             ]),
         });
 
@@ -585,9 +594,9 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             simulationResultsArray,
             simulationResultsReadBuffers,
             simulationResultsStorage,
+            simulationWorkgroupSize,
             vertexBuffer,
             vertices,
-            workgroupSize,
         };
     });
 
@@ -757,8 +766,12 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                 const computePass = computeEncoder.beginComputePass();
                 computePass.setPipeline(data.simulationPipeline);
                 computePass.setBindGroup(0, data.bindGroups[data.computeStep % 2]);
-                const workgroupCountX = Math.ceil(untrackedGridSize.width / data.workgroupSize);
-                const workgroupCountY = Math.ceil(untrackedGridSize.height / data.workgroupSize);
+                const workgroupCountX = Math.ceil(
+                    untrackedGridSize.width / data.simulationWorkgroupSize.x
+                );
+                const workgroupCountY = Math.ceil(
+                    untrackedGridSize.height / data.simulationWorkgroupSize.y
+                );
                 computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
                 computePass.end();
                 data.computeStep++;
