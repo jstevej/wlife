@@ -1,6 +1,7 @@
 import { Component, createEffect, createMemo, For, JSX, untrack } from 'solid-js';
+import { AgeHistogram } from './AgeHistogram';
 import PanZoomIcon from './assets/pan-zoom.svg';
-import { gridScaleLimit, useGameOfLifeControls } from './GameOfLifeControlsProvider';
+import { gridScaleLimit, maxAge, useGameOfLifeControls } from './GameOfLifeControlsProvider';
 import { getGradientName, getGradientStops, gradientNames, isGradientName } from './Gradients';
 import { SimulationResultsChart } from './SimulationResultsChart';
 
@@ -268,7 +269,7 @@ export const Controls: Component = () => {
                     <div class="flex-1 flex flex-row justify-center">
                         <div>← age →</div>
                     </div>
-                    <div>100</div>
+                    <div>{maxAge.toString()}</div>
                 </div>
             </div>
             <Checkbox label="Show Axes" value={showAxes()} onChange={setShowAxes} />
@@ -340,11 +341,12 @@ export const Controls: Component = () => {
                     <div>{`${pixelsPerCell()} px/cell`}</div>
                 </div>
             </div>
+            <AgeHistogram class="pt-1" />
             <SimulationResultsChart class="pt-1" />
             <div class="flex-1"></div>
             <div class="flex flex-row justify-center">
                 <div class="my-2 text-blue-500">
-                    <PanZoomIcon />
+                    <PanZoomIcon height="50px" />
                 </div>
             </div>
             <div>

@@ -169,26 +169,26 @@ const gradientDefs: Record<GradientName, GradientDef> = {
         name: 'Sunset',
         type: 'rgb',
         values: [
-            [92, 83, 165],
-            [160, 89, 160],
-            [206, 102, 147],
-            [235, 127, 134],
-            [248, 160, 126],
-            [250, 196, 132],
             [243, 231, 155],
+            [250, 196, 132],
+            [248, 160, 126],
+            [235, 127, 134],
+            [206, 102, 147],
+            [160, 89, 160],
+            [92, 83, 165],
         ],
     },
     sunsetRev: {
         name: 'Sunset Rev',
         type: 'rgb',
         values: [
-            [243, 231, 155],
-            [250, 196, 132],
-            [248, 160, 126],
-            [235, 127, 134],
-            [206, 102, 147],
-            [160, 89, 160],
             [92, 83, 165],
+            [160, 89, 160],
+            [206, 102, 147],
+            [235, 127, 134],
+            [248, 160, 126],
+            [250, 196, 132],
+            [243, 231, 155],
         ],
     },
     viridis: {
@@ -259,7 +259,7 @@ export function getGradientStyle(gradientName: GradientName, pos: number): strin
         pos = 1;
     }
 
-    const age = pos * maxAge;
+    const age = Math.round(pos * (maxAge - 1));
     const rgb = [0, 1, 2].map(i => (255 * values[3 * age + i]).toFixed(0)).join(', ');
     return `rgb(${rgb})`;
 }
@@ -269,18 +269,18 @@ export function getGradientValues(gradientName: GradientName): Float32Array {
 
     if (values === undefined) {
         const gradientDef = gradientDefs[gradientName];
-        values = new Float32Array((maxAge + 1) * 3);
+        values = new Float32Array(maxAge * 3);
 
         const numValues = gradientDef.values.length;
         values[0] = gradientDef.values[0][0];
         values[1] = gradientDef.values[0][1];
         values[2] = gradientDef.values[0][2];
-        values[3 * maxAge] = gradientDef.values[numValues - 1][0];
-        values[3 * maxAge + 1] = gradientDef.values[numValues - 1][1];
-        values[3 * maxAge + 2] = gradientDef.values[numValues - 1][2];
+        values[3 * (maxAge - 1)] = gradientDef.values[numValues - 1][0];
+        values[3 * (maxAge - 1) + 1] = gradientDef.values[numValues - 1][1];
+        values[3 * (maxAge - 1) + 2] = gradientDef.values[numValues - 1][2];
 
-        for (let age = 1; age < maxAge + 1; age++) {
-            const index = (age * (numValues - 1)) / maxAge;
+        for (let age = 1; age < maxAge - 1; age++) {
+            const index = (age * (numValues - 1)) / (maxAge - 1);
             const indexLeft = Math.floor(index);
             const indexRight = Math.ceil(index);
             const frac = index - indexLeft;
@@ -292,7 +292,7 @@ export function getGradientValues(gradientName: GradientName): Float32Array {
         }
 
         if (gradientDef.type === 'hsl') {
-            for (let age = 0; age < maxAge + 1; age++) {
+            for (let age = 0; age < maxAge; age++) {
                 const [r, g, b] = hslToRgb(
                     values[3 * age],
                     values[3 * age + 1],
@@ -303,7 +303,7 @@ export function getGradientValues(gradientName: GradientName): Float32Array {
                 values[3 * age + 2] = b;
             }
         } else if (gradientDef.type === 'rgb') {
-            for (let age = 0; age < maxAge + 1; age++) {
+            for (let age = 0; age < maxAge; age++) {
                 values[3 * age] /= 255;
                 values[3 * age + 1] /= 255;
                 values[3 * age + 2] /= 255;

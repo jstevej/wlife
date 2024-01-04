@@ -19,8 +19,10 @@ import {
     useGameOfLifeControls,
 } from './GameOfLifeControlsProvider';
 import { getGradientValues } from './Gradients';
+import histReducerCode from './HistReducer.wgsl?raw';
 import { simulationResults } from './SimulationResults';
 import simulationShaderCode from './SimulationShader.wgsl?raw';
+import { delayMs, waitFor } from './Sutl';
 import { replaceConst, replaceWorkgroupSize, wgslReplace } from './WgslReplace';
 
 export type GameOfLifeProps = {
@@ -38,6 +40,8 @@ type Vec2 = {
 };
 
 type GpuData = {
+    ageHistChunksArray: Uint32Array;
+    ageHistChunksStorage: GPUBuffer;
     bindGroups: Array<GPUBindGroup>;
     cellGradientStorage: GPUBuffer;
     cellPipeline: GPURenderPipeline;
@@ -48,6 +52,12 @@ type GpuData = {
     device: GPUDevice;
     gridSizeArray: Float32Array;
     gridSizeBuffer: GPUBuffer;
+    histContext: GPUCanvasContext;
+    histParamsArray: Float32Array;
+    histParamsStorage: GPUBuffer;
+    histReducerBindGroups: Array<GPUBindGroup>;
+    histReducerPipeline: GPUComputePipeline;
+    histRenderPipeline: GPURenderPipeline;
     offsetCellsArray: Float32Array;
     offsetCellsStorage: GPUBuffer;
     pixelsPerCellArray: Float32Array;
@@ -260,10 +270,9 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
     const [gpuData] = createResource<GpuData | string>(async (): Promise<GpuData | string> => {
         // Detect frame rate. We do this by requesting a number of animation frames, measuring the
-        // time between them, and choosing the smallest of the measured times. Choosing the smallest
-        // of many measured times helps to filter out missed frames due to system load. Also, the
-        // timestamp returned by requestAnimationFrame provides much more accurate and consistent
-        // results than explicitly grabbing timestamps with performance.now().
+        // time between them, and choosing the median of the measured times. The timestamp returned
+        // by requestAnimationFrame provides much more accurate and consistent results than
+        // explicitly grabbing timestamps with performance.now().
 
         console.log(`detecting frame rate...`);
 
@@ -282,11 +291,9 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             });
         }
 
-        const minimumFrameRate = 1000 / frameTimesMs[frameTimesMs.length - 1];
         const medianFrameRate = 1000 / frameTimesMs[frameTimesMs.length >> 1];
-        const detectedFrameRate = Math.round(minimumFrameRate);
+        const detectedFrameRate = Math.round(medianFrameRate);
 
-        console.log(`minimum measured frame rate = ${minimumFrameRate.toFixed(3)} fps`);
         console.log(`median measured frame rate = ${medianFrameRate.toFixed(3)} fps`);
         console.log(`detected frame rate = ${detectedFrameRate} fps`);
 
@@ -303,14 +310,27 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         const device = await adapter.requestDevice();
         const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
 
-        if (!canvas) return `canvas element not found`;
+        if (!canvas) return `game canvas element not found`;
 
         const context = canvas.getContext('webgpu');
 
-        if (!context) return `context not found`;
+        if (!context) return `game context not found`;
+
+        const histCanvas = await waitFor(
+            () => document.getElementById('ageHistogram') as HTMLCanvasElement | undefined,
+            100,
+            5000
+        );
+
+        if (!histCanvas) return `histogram canvas element not found`;
+
+        const histContext = histCanvas.getContext('webgpu');
+
+        if (!histContext) return `histogram context not found`;
 
         const format = navigator.gpu.getPreferredCanvasFormat();
         context.configure({ device, format });
+        histContext.configure({ device, format });
 
         const vertices = new Float32Array([-1, -1, 1, -1, 1, 1, -1, -1, 1, 1, -1, 1]);
         const vertexBuffer = device.createBuffer({
@@ -349,7 +369,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             }),
         ];
         for (let i = 0; i < cellStateArray.length; i++) {
-            cellStateArray[i] = Math.random() < untrack(initialDensity) ? 1 : -maxAge;
+            cellStateArray[i] = Math.random() < untrack(initialDensity) ? 1 : -maxAge + 1;
         }
         device.queue.writeBuffer(cellStateStorage[0], 0, cellStateArray);
 
@@ -397,7 +417,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         const cellGradientStorage = device.createBuffer({
             label: 'cellGradient storage',
-            size: 3 * (maxAge + 1) * 4,
+            size: 3 * maxAge * 4, // 3 f32 rgb values
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         });
         device.queue.writeBuffer(cellGradientStorage, 0, getGradientValues(untrack(gradientName)));
@@ -409,6 +429,33 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             label: 'simulationResults storage',
             size: simulationResultsArray.byteLength,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+        });
+
+        // group 0, location 8: ageHistChunks
+
+        const simulationWorkgroupSize = { x: 16, y: 16 };
+        const workgroupCountX = Math.ceil(untrackedGridSize.width / simulationWorkgroupSize.x);
+        const workgroupCountY = Math.ceil(untrackedGridSize.height / simulationWorkgroupSize.y);
+        const numSimulationWorkgroups = workgroupCountX * workgroupCountY;
+
+        // Note that ageHistChunksArray only contains zero data for one histogram. We don't need to
+        // zero out the other chunks because the reducer does it.
+
+        const ageHistChunksArray = new Uint32Array(2 * maxAge);
+        ageHistChunksArray.fill(0);
+        const ageHistChunksStorage = device.createBuffer({
+            label: 'ageHistChunks storage',
+            size: numSimulationWorkgroups * 2 * maxAge * 4, // 4 bytes per u32
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC,
+        });
+
+        // group 0, location 9: histogramParams
+
+        const histParamsArray = new Float32Array(2);
+        const histParamsStorage = device.createBuffer({
+            label: 'histogramParams storage',
+            size: histParamsArray.byteLength,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         });
 
         const simulationResultsReadBuffers: Array<GPUBuffer> = [];
@@ -431,24 +478,24 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
         const cellShaderModule = device.createShaderModule({
             label: 'cell shader',
-            code: wgslReplace(cellShaderCode, [
-                replaceConst('maxAge', `${maxAge}i`),
-                replaceConst('minAge', `-${maxAge}i`),
-            ]),
+            code: wgslReplace(cellShaderCode, [replaceConst('maxAge', `${maxAge}u`)]),
         });
 
-        const simulationWorkgroupSize = { x: 16, y: 16 };
         const simulationShaderModule = device.createShaderModule({
             label: 'game of life simulation shader',
             code: wgslReplace(simulationShaderCode, [
-                replaceConst('maxAge', `${maxAge}i`),
-                replaceConst('minAge', `-${maxAge}i`),
+                replaceConst('maxAge', `${maxAge}u`),
                 replaceWorkgroupSize(
                     'computeMain',
                     simulationWorkgroupSize.x,
                     simulationWorkgroupSize.y
                 ),
             ]),
+        });
+
+        const histReducerModule = device.createShaderModule({
+            label: 'histogram reducer module',
+            code: wgslReplace(histReducerCode, [replaceConst('maxAge', `${maxAge}u`)]),
         });
 
         // Pipeline.
@@ -499,6 +546,16 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                     visibility: GPUShaderStage.COMPUTE,
                     buffer: { type: 'storage' }, // TODO: write-only-storage?
                 },
+                {
+                    binding: 8,
+                    visibility: GPUShaderStage.COMPUTE | GPUShaderStage.FRAGMENT,
+                    buffer: { type: 'storage' }, // TODO: write-only-storage?
+                },
+                {
+                    binding: 9,
+                    visibility: GPUShaderStage.FRAGMENT,
+                    buffer: { type: 'read-only-storage' },
+                },
             ],
         });
 
@@ -539,6 +596,14 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                         binding: 7,
                         resource: { buffer: simulationResultsStorage },
                     },
+                    {
+                        binding: 8,
+                        resource: { buffer: ageHistChunksStorage },
+                    },
+                    {
+                        binding: 9,
+                        resource: { buffer: histParamsStorage },
+                    },
                 ],
             })
         );
@@ -572,7 +637,59 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             },
         });
 
+        const histReducerPipeline = device.createComputePipeline({
+            label: 'histogram reducer pipeline',
+            layout: 'auto',
+            compute: {
+                module: histReducerModule,
+                entryPoint: 'reduceHistChunks',
+            },
+        });
+
+        const histRenderPipeline = device.createRenderPipeline({
+            label: 'histogram render pipeline',
+            layout: pipelineLayout,
+            vertex: {
+                module: cellShaderModule,
+                entryPoint: 'histVertexMain',
+                buffers: [vertexBufferLayout],
+            },
+            fragment: {
+                module: cellShaderModule,
+                entryPoint: 'histFragmentMain',
+                targets: [{ format }],
+            },
+        });
+
+        const histReducerBindGroups: Array<GPUBindGroup> = [];
+        const numSteps = Math.ceil(Math.log2(numSimulationWorkgroups));
+        console.log(`numSimulationWorkgroups = ${numSimulationWorkgroups}`);
+        console.log(`numSteps = ${numSteps}`);
+
+        for (let i = 0; i < numSteps; i++) {
+            const stride = 2 ** i;
+            const strideBuffer = device.createBuffer({
+                size: 4,
+                usage: GPUBufferUsage.UNIFORM,
+                mappedAtCreation: true,
+            });
+            new Uint32Array(strideBuffer.getMappedRange()).set([stride]);
+            strideBuffer.unmap();
+
+            const histReducerBindGroup = device.createBindGroup({
+                layout: histReducerPipeline.getBindGroupLayout(0),
+                entries: [
+                    { binding: 0, resource: { buffer: ageHistChunksStorage } },
+                    { binding: 1, resource: { buffer: strideBuffer } },
+                ],
+            });
+
+            histReducerBindGroups.push(histReducerBindGroup);
+        }
+
         return {
+            ageHistChunksArray,
+            ageHistChunksStorage,
             bindGroups,
             cellGradientStorage,
             cellPipeline,
@@ -583,6 +700,12 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
             device,
             gridSizeArray,
             gridSizeBuffer,
+            histContext,
+            histParamsArray,
+            histParamsStorage,
+            histReducerBindGroups,
+            histReducerPipeline,
+            histRenderPipeline,
             offsetCellsArray,
             offsetCellsStorage,
             pixelsPerCellArray,
@@ -751,7 +874,22 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         data.device.queue.writeBuffer(data.pixelsPerCellStorage, 0, data.pixelsPerCellArray);
 
         if (doCompute) {
+            const workgroupCountX = Math.ceil(
+                untrackedGridSize.width / data.simulationWorkgroupSize.x
+            );
+            const workgroupCountY = Math.ceil(
+                untrackedGridSize.height / data.simulationWorkgroupSize.y
+            );
             let numComputes = untrack(computesPerFrame);
+
+            // Initialize the histogram buffers to 0. Note that ageHistChunksArray only contains
+            // zero data for one histogram. We don't need to zero out the other chunks because the
+            // reducer does it.
+            //
+            // Also note that when doing multiple computes per render, we sum the histogram data
+            // from all the computes into one histogram per render.
+
+            data.device.queue.writeBuffer(data.ageHistChunksStorage, 0, data.ageHistChunksArray);
 
             while (numComputes-- > 0) {
                 data.simulationResultsArray[0] = 0;
@@ -766,12 +904,6 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                 const computePass = computeEncoder.beginComputePass();
                 computePass.setPipeline(data.simulationPipeline);
                 computePass.setBindGroup(0, data.bindGroups[data.computeStep % 2]);
-                const workgroupCountX = Math.ceil(
-                    untrackedGridSize.width / data.simulationWorkgroupSize.x
-                );
-                const workgroupCountY = Math.ceil(
-                    untrackedGridSize.height / data.simulationWorkgroupSize.y
-                );
                 computePass.dispatchWorkgroups(workgroupCountX, workgroupCountY);
                 computePass.end();
                 data.computeStep++;
@@ -783,7 +915,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
                 while (resultsWriteBuffer.mapState !== 'unmapped') {
                     console.warn('resultsWriteBuffer not ready');
-                    await new Promise(resolve => setTimeout(resolve, 1));
+                    await delayMs(1);
                 }
 
                 computeEncoder.copyBufferToBuffer(
@@ -806,7 +938,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
 
                     while (resultsReadBuffer.mapState !== 'unmapped') {
                         console.warn('resultsReadBuffer not ready');
-                        await new Promise(resolve => setTimeout(resolve, 1));
+                        await delayMs(1);
                     }
 
                     await resultsReadBuffer.mapAsync(GPUMapMode.READ);
@@ -818,6 +950,21 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                     resultsReadBuffer.unmap();
                 });
             }
+
+            // Run histogram reducer.
+
+            const histReducerEncoder = data.device.createCommandEncoder();
+            const histReducerPass = histReducerEncoder.beginComputePass();
+            histReducerPass.setPipeline(data.histReducerPipeline);
+            let chunksLeft = workgroupCountX * workgroupCountY;
+            data.histReducerBindGroups.forEach(bindGroup => {
+                histReducerPass.setBindGroup(0, bindGroup);
+                const dispatchCount = Math.floor(0.5 * chunksLeft);
+                chunksLeft -= dispatchCount;
+                histReducerPass.dispatchWorkgroups(dispatchCount);
+            });
+            histReducerPass.end();
+            data.device.queue.submit([histReducerEncoder.finish()]);
         }
 
         const renderEncoder = data.device.createCommandEncoder();
@@ -840,6 +987,31 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         pass.end();
         data.renderStep++;
         data.device.queue.submit([renderEncoder.finish()]);
+
+        // height, width
+        const histCanvas = document.getElementById('ageHistogram') as HTMLCanvasElement;
+        data.histParamsArray[0] = histCanvas.height;
+        data.histParamsArray[1] = histCanvas.width;
+        data.device.queue.writeBuffer(data.histParamsStorage, 0, data.histParamsArray);
+
+        const histRenderEncoder = data.device.createCommandEncoder();
+        const histRenderPass = histRenderEncoder.beginRenderPass({
+            colorAttachments: [
+                {
+                    view: data.histContext.getCurrentTexture().createView(),
+                    loadOp: 'clear',
+                    clearValue: [0, 0, 0, 1],
+                    storeOp: 'store',
+                },
+            ],
+        });
+
+        histRenderPass.setPipeline(data.histRenderPipeline);
+        histRenderPass.setVertexBuffer(0, data.vertexBuffer);
+        histRenderPass.setBindGroup(0, data.bindGroups[data.computeStep % 2]);
+        histRenderPass.draw(data.vertices.length >> 1, 1);
+        histRenderPass.end();
+        data.device.queue.submit([histRenderEncoder.finish()]);
     };
 
     const onMouseDown = (event: MouseEvent) => {
