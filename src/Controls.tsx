@@ -52,7 +52,7 @@ const Select: Component<SelectProps> = props => {
 
     return (
         <div class="flex flex-row space-x-2 py-1">
-            <div>{`${props.title}:`}</div>
+            <div class="flex-1">{`${props.title}:`}</div>
             <select onChange={onChange}>
                 <For each={props.options}>
                     {opt => (
@@ -341,7 +341,7 @@ export const Controls: Component = () => {
                     <div>{`${pixelsPerCell()} px/cell`}</div>
                 </div>
             </div>
-            <AgeHistogram class="pt-1" />
+            <AgeHistogram class="pt-1 self-center" />
             <SimulationResultsChart class="pt-1" />
             <div class="flex-1"></div>
             <div class="flex flex-row justify-center">

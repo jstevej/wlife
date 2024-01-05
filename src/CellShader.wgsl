@@ -85,39 +85,12 @@ fn histVertexMain(input: VertexInput) -> VertexOutput {
     return output;
 }
 
-fn sigmoidMap(x: f32, width: f32, k: f32) -> f32 {
-    var y = x / (width - 1);
-    y = 1 / (1 + exp(-k * (y - 0.5)));
-    return y * (width - 1);
-}
-
-//fn asinMap(x: f32, width: f32) -> f32 {
-//    var y = x / (width - 1);
-//    y = 0.318309886 * asin(2 * (y - 0.5)) + 0.5;
-//    return y * (width - 1);
-//}
-
-//fn cubicMap(x: f32, width: f32) -> f32 {
-//    var y = x / (width - 1);
-//    y = 4f * pow(y - 0.5, 3f) + 0.5;
-//    return y * (width - 1);
-//}
-
-//fn invCubicMap(x: f32, width: f32) -> f32 {
-//    var y = x / (width - 1);
-//    y = pow(2f, -2f / 3f) * pow(y - 0.5, 1f / 3f) + 0.5;
-//    return y * (width - 1);
-//}
-
 @fragment
 fn histFragmentMain(input: VertexOutput) -> @location(0) vec4f {
     let height2 = 0.5 * histParams.height;
     let width2 = 0.5 * histParams.width;
     let binPerPx = f32(maxAge - 1) / (histParams.width - 1);
-    // TODO: not sure why we need to map to width (instead of width - 1) to see last bin
-    let xx = select(input.pos.x, histParams.width, input.pos.x > histParams.width - 2);
-    //let x = sigmoidMap(xx, histParams.width, 12);
-    let x = xx;
+    let x = input.pos.x - 0.5;
 
     var color = vec4f(0, 0, 0, 1);
 
