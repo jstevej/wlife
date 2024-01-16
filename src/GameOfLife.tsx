@@ -1060,11 +1060,25 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
         }
     };
 
+    let wheelTime = performance.now();
+    const wheelTimeThreshMs = 200;
+
     const onWheel = (event: WheelEvent) => {
+        // Try to account for trackpads, which are are much more sensitive and typically have much
+        // more inertia. We do this by observing that (in my limited testing) trackpads have a
+        // deltaY of +/-1 for small movements while mouse wheels have +/-4. If we see +/-1 values
+        // for deltaY, then limit the rate at which we process the events.
+
+        if (Math.abs(event.deltaY) <= 1) {
+            const newWheelTime = performance.now();
+            if (newWheelTime - wheelTime < wheelTimeThreshMs) return;
+            wheelTime = newWheelTime;
+        }
+
+        const direction = Math.sign(event.deltaY);
         const untrackedGridSize = untrack(gridSize);
         const untrackedPixelsPerCell = untrack(pixelsPerCell);
         const invert = untrack(zoomIsInverted) ? 1 : -1;
-        const direction = Math.sign(event.deltaY);
         const newPixelsPerCell = Math.min(
             Math.max(untrackedPixelsPerCell + invert * direction, 1),
             20
