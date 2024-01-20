@@ -1113,14 +1113,14 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
     return (
         <Switch>
             <Match when={typeof gpuData() === 'string'}>
-                <div class="m-4">
+                <div class="m-4 space-y-4">
                     <div>Unable to initialize canvas and WebGPU.</div>
-                    <div>{`Error: ${gpuData() ?? 'unknown'}`}</div>
+                    <div>{`Reason: ${gpuData() ?? 'unknown'}`}</div>
                     <div>
-                        You may need to update to the latest version of your browser. The latest
-                        versions of Chrome, Edge, and Opera are supported. The latest versions of
-                        Firefox and Safari need WebGPU support enabled in their settings. Other
-                        browsers and platforms are not yet supported. See{' '}
+                        WebGPU is supported in the latest versions of Chrome, Edge, and Opera.
+                        Support can be enabled in Firefox by setting the dom.webgpu.enabled flag.
+                        Support can be enabled in the Safari Technical Preview via the Develop menu.
+                        Other browsers and platforms are not yet supported. See{' '}
                         <a
                             href="https://caniuse.com/?search=webgpu"
                             target="_blank"
@@ -1128,7 +1128,7 @@ export const GameOfLife: Component<GameOfLifeProps> = props => {
                         >
                             caniuse
                         </a>{' '}
-                        for more information.
+                        for the most up-to-date information.
                     </div>
                 </div>
             </Match>
